@@ -1,0 +1,24 @@
+# Build output
+anchor/target/
+
+# Team prep files
+team/
+explorations/
+explanations/
+ANCHOR_COMPLETE_REFERENCE.md
+Anchor_Architecture.drawio
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Maven
+*.log
