@@ -91,6 +91,7 @@
                         <contextPath>/anchor</contextPath>
                     </webApp>
                     <httpConnector>
+                        <host>0.0.0.0</host>
                         <port>8080</port>
                     </httpConnector>
                 </configuration>

@@ -334,6 +334,9 @@
   <button class="tab-btn" onclick="switchTab(3)">Password Hashing</button>
   <button class="tab-btn" onclick="switchTab(4)">Servlet Mapping</button>
   <button class="tab-btn" onclick="switchTab(5)">Tech Stack</button>
+  <button class="tab-btn" onclick="switchTab(6)">Connection Flow</button>
+  <button class="tab-btn" onclick="switchTab(7)">Multi-User</button>
+  <button class="tab-btn" onclick="switchTab(8)">Network Setup</button>
 </div>
 
 <!-- ═══════════════════ TAB 1: Architecture Overview ═══════════════════ -->
@@ -755,6 +758,271 @@
         <div class="stack-item planned" style="border-radius:4px;padding:2px 4px;border:1px dashed #e6b800;background:#fff8e1;">
           <span>MySQL 8.0 [PLANNED]</span><span class="pkg">com.mysql.cj</span>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB 7: Connection Flow ══════════ -->
+<div class="tab-content" id="tab6">
+  <div class="diagram-container" style="padding:24px;">
+    <h2 style="text-align:center;margin-bottom:20px;">Serial/SSH Connection Flow</h2>
+    <p style="text-align:center;color:#666;margin-bottom:24px;">How a browser keystroke reaches a physical device and back</p>
+
+    <div style="max-width:700px;margin:0 auto;">
+      <!-- Step 1 -->
+      <div style="background:#dae8fc;border:2px solid #6c8ebf;padding:14px;border-radius:6px;text-align:center;">
+        <b>1. User types "hello" in browser</b><br>
+        <small>dashboard.jsp JavaScript: ws.send("hello")</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <!-- Step 2 -->
+      <div style="background:#d5e8d4;border:2px solid #82b366;padding:14px;border-radius:6px;text-align:center;">
+        <b>2. TerminalWebSocket.onMessage("hello")</b><br>
+        <small>@OnMessage fires in Java. Parses command.</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <!-- Step 3 -->
+      <div style="background:#d5e8d4;border:2px solid #82b366;padding:14px;border-radius:6px;text-align:center;">
+        <b>3. ConnectionManager.send(sessionId, bytes)</b><br>
+        <small>Singleton looks up which Connection belongs to this session.<br>Checks isOwner() - only owner can send.</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <!-- Step 4 - Branch -->
+      <div style="display:flex;gap:20px;">
+        <div style="flex:1;background:#e6ffe6;border:2px solid #82b366;padding:14px;border-radius:6px;text-align:center;">
+          <b>4a. SerialConnection.send()</b><br>
+          <small>serialPort.writeBytes(data, len)<br>jSerialComm writes to USB port</small>
+        </div>
+        <div style="flex:1;background:#e6ffe6;border:2px solid #82b366;padding:14px;border-radius:6px;text-align:center;">
+          <b>4b. SshConnection.send()</b><br>
+          <small>outputStream.write(data)<br>outputStream.flush()<br>JSch sends over TCP</small>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <!-- Step 5 -->
+      <div style="background:#f8cecc;border:2px solid #b85450;padding:14px;border-radius:6px;text-align:center;">
+        <b>5. Physical Device / Remote Server</b><br>
+        <small>Arduino processes command, or Linux shell executes it.<br>Sends response back.</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8593;</div>
+
+      <div style="text-align:center;background:#fff3cd;border:2px solid #ffc107;padding:14px;border-radius:6px;margin-top:4px;">
+        <b>6. Reader Thread (background, every 50ms)</b><br>
+        <small>connection.receive() polls for data.<br>
+        If data available: session.getBasicRemote().sendText(data)<br>
+        Also: ConnectionManager.broadcastToViewers(data)</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <div style="background:#dae8fc;border:2px solid #6c8ebf;padding:14px;border-radius:6px;text-align:center;">
+        <b>7. Browser receives data</b><br>
+        <small>ws.onmessage fires in JavaScript.<br>appendTerminal(event.data) displays it.</small>
+      </div>
+    </div>
+
+    <div style="margin-top:30px;background:#f5f5f5;padding:14px;border-radius:6px;">
+      <b>Key Java Concepts in this flow:</b><br>
+      <small>
+        - <b>Polymorphism:</b> ConnectionManager calls send()/receive() without knowing if it's Serial or SSH<br>
+        - <b>Daemon Thread:</b> Reader thread runs in background, auto-stops when server stops<br>
+        - <b>volatile:</b> reading flag visible across threads<br>
+        - <b>byte[]:</b> Raw binary data for hardware communication<br>
+        - <b>WebSocket:</b> Bidirectional persistent connection (unlike HTTP request-response)
+      </small>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB 8: Multi-User ══════════ -->
+<div class="tab-content" id="tab7">
+  <div class="diagram-container" style="padding:24px;">
+    <h2 style="text-align:center;margin-bottom:20px;">Multi-User Access (Owner/Viewer)</h2>
+    <p style="text-align:center;color:#666;margin-bottom:24px;">What happens when multiple people connect to the same device</p>
+
+    <div style="max-width:750px;margin:0 auto;">
+
+      <!-- Scenario 1 -->
+      <div style="background:#d5e8d4;border:2px solid #82b366;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 1: Student A connects to COM3</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          <code>connect serial COM3 9600</code><br><br>
+          ConnectionManager.connectSerial():<br>
+          &nbsp;&nbsp;1. Check portToConnection map - is COM3 in use? <b>NO</b><br>
+          &nbsp;&nbsp;2. Create new SerialConnection("COM3", 9600)<br>
+          &nbsp;&nbsp;3. serialConnection.connect() - opens port<br>
+          &nbsp;&nbsp;4. Store in connections map<br>
+          &nbsp;&nbsp;5. Set Student A as <span style="background:#28a745;color:#fff;padding:2px 8px;border-radius:3px;">OWNER</span><br>
+          &nbsp;&nbsp;6. Start reader thread for this connection
+        </div>
+      </div>
+
+      <!-- Scenario 2 -->
+      <div style="background:#fff3cd;border:2px solid #ffc107;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 2: Student B connects to COM3 (same device!)</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          <code>connect serial COM3 9600</code><br><br>
+          ConnectionManager.connectSerial():<br>
+          &nbsp;&nbsp;1. Check portToConnection map - is COM3 in use? <b>YES</b><br>
+          &nbsp;&nbsp;2. Port owned by Student A<br>
+          &nbsp;&nbsp;3. Add Student B to connectionViewers list<br>
+          &nbsp;&nbsp;4. Set Student B as <span style="background:#ffc107;color:#000;padding:2px 8px;border-radius:3px;">VIEWER</span><br>
+          &nbsp;&nbsp;5. Student B sees output but <b>cannot type commands</b><br>
+          &nbsp;&nbsp;6. Message: "Device in use by Student A. Joined as viewer."
+        </div>
+      </div>
+
+      <!-- Data flow -->
+      <div style="background:#dae8fc;border:2px solid #6c8ebf;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 3: Device sends output</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          Reader thread calls connection.receive()<br><br>
+          Data goes to:<br>
+          &nbsp;&nbsp;&#8594; Student A (owner) via session.getBasicRemote().sendText()<br>
+          &nbsp;&nbsp;&#8594; Student B (viewer) via broadcastToViewers()<br>
+          &nbsp;&nbsp;&#8594; Student C (viewer) via broadcastToViewers()<br><br>
+          <b>Everyone sees the same output simultaneously.</b>
+        </div>
+      </div>
+
+      <!-- Command flow -->
+      <div style="background:#f5f5f5;border:2px solid #ccc;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 4: Who can type?</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          Student A types "ls" &#8594; ConnectionManager.send() &#8594; checks isOwner() &#8594; <b>YES</b> &#8594; sent to device<br><br>
+          Student B types "ls" &#8594; ConnectionManager.send() &#8594; checks isOwner() &#8594; <b>NO</b> &#8594; blocked<br>
+          Message: "You are a VIEWER. Only the owner can send commands."
+        </div>
+      </div>
+
+      <!-- Promotion -->
+      <div style="background:#f8cecc;border:2px solid #b85450;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 5: Student A disconnects</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          ConnectionManager.disconnect(Student A session):<br><br>
+          &nbsp;&nbsp;1. Student A was OWNER<br>
+          &nbsp;&nbsp;2. Check connectionViewers list - Student B is waiting<br>
+          &nbsp;&nbsp;3. <b>Promote Student B to OWNER</b><br>
+          &nbsp;&nbsp;4. Send message to B: "You are now the OWNER. You can type commands."<br>
+          &nbsp;&nbsp;5. Student B can now control the device<br><br>
+          If no viewers: close the SerialConnection, free the port.
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;background:#f5f5f5;padding:14px;border-radius:6px;">
+      <b>Java Concepts:</b><br>
+      <small>
+        - <b>synchronized:</b> connectSerial() is synchronized to prevent race condition when two people connect at the same millisecond<br>
+        - <b>ConcurrentHashMap:</b> Thread-safe map for multiple WebSocket threads accessing simultaneously<br>
+        - <b>Iterator.remove():</b> Safely removes dead viewer sessions while iterating<br>
+        - <b>instanceof:</b> Check if connection is SerialConnection for port cleanup<br>
+        - <b>Observer pattern:</b> broadcastToViewers() pushes data to all subscribers
+      </small>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB 9: Network Setup ══════════ -->
+<div class="tab-content" id="tab8">
+  <div class="diagram-container" style="padding:24px;">
+    <h2 style="text-align:center;margin-bottom:20px;">Network Architecture</h2>
+    <p style="text-align:center;color:#666;margin-bottom:24px;">Multiple laptops as servers, accessed from any browser on the network</p>
+
+    <div style="max-width:800px;margin:0 auto;">
+
+      <!-- Network diagram -->
+      <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:24px;">
+        <!-- Server 1 -->
+        <div style="background:#d5e8d4;border:2px solid #82b366;padding:16px;border-radius:8px;width:220px;">
+          <div style="text-align:center;font-weight:bold;margin-bottom:8px;">Laptop A (Server)</div>
+          <div style="background:#fff;padding:8px;border-radius:4px;font-size:0.85em;">
+            Anchor Server running<br>
+            IP: 192.168.1.10:8080<br><br>
+            Devices connected:<br>
+            - Arduino Mega (COM3)<br>
+            - Sensor Board (COM5)
+          </div>
+        </div>
+        <!-- Server 2 -->
+        <div style="background:#d5e8d4;border:2px solid #82b366;padding:16px;border-radius:8px;width:220px;">
+          <div style="text-align:center;font-weight:bold;margin-bottom:8px;">Laptop B (Server)</div>
+          <div style="background:#fff;padding:8px;border-radius:4px;font-size:0.85em;">
+            Anchor Server running<br>
+            IP: 192.168.1.20:8080<br><br>
+            Devices connected:<br>
+            - Cisco Router (COM1)<br>
+            - Raspberry Pi (USB)
+          </div>
+        </div>
+        <!-- Client -->
+        <div style="background:#dae8fc;border:2px solid #6c8ebf;padding:16px;border-radius:8px;width:220px;">
+          <div style="text-align:center;font-weight:bold;margin-bottom:8px;">Laptop C (Client)</div>
+          <div style="background:#fff;padding:8px;border-radius:4px;font-size:0.85em;">
+            No Anchor server needed<br>
+            Just a browser<br><br>
+            Can access:<br>
+            - <a href="#" style="color:#007bff;">192.168.1.10:8080</a> (A's devices)<br>
+            - <a href="#" style="color:#007bff;">192.168.1.20:8080</a> (B's devices)
+          </div>
+        </div>
+      </div>
+
+      <!-- Network line -->
+      <div style="background:#fff;border:2px solid #333;padding:10px;text-align:center;border-radius:20px;margin:0 auto;max-width:500px;">
+        WiFi Network / LAN (same subnet)
+      </div>
+
+      <!-- How it works -->
+      <div style="margin-top:24px;">
+        <h3 style="margin-bottom:12px;">How It Works</h3>
+
+        <div style="background:#fff;border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:10px;">
+          <b>1. Each laptop with hardware runs its own Anchor server</b><br>
+          <code style="background:#f5f5f5;padding:2px 6px;">cd anchor && mvn jetty:run</code><br>
+          <small>Jetty binds to 0.0.0.0 (all network interfaces) - not just localhost</small>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:10px;">
+          <b>2. Server detects its own hardware</b><br>
+          <small>DeviceScannerServlet calls SerialPort.getCommPorts() to list local USB ports.<br>
+          Only ports physically connected to THIS laptop are shown.</small>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:10px;">
+          <b>3. Client connects from any browser</b><br>
+          <small>Student opens http://192.168.1.10:8080/anchor from their laptop.<br>
+          Logs in, scans devices, connects to Arduino on Laptop A.<br>
+          All communication goes through WebSocket over the network.</small>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:10px;">
+          <b>4. Multiple clients, multiple servers</b><br>
+          <small>Student 1 connects to Laptop A's Arduino.<br>
+          Student 2 connects to Laptop B's Router.<br>
+          Student 3 connects to Laptop A's Arduino as VIEWER.<br>
+          Professor monitors all from their own browser.</small>
+        </div>
+      </div>
+
+      <!-- Config -->
+      <div style="margin-top:20px;background:#f5f5f5;padding:14px;border-radius:6px;">
+        <b>Configuration (pom.xml):</b><br>
+        <code style="font-size:0.9em;">
+          &lt;httpConnector&gt;<br>
+          &nbsp;&nbsp;&lt;host&gt;0.0.0.0&lt;/host&gt; &lt;!-- listen on all interfaces --&gt;<br>
+          &nbsp;&nbsp;&lt;port&gt;8080&lt;/port&gt;<br>
+          &lt;/httpConnector&gt;
+        </code><br><br>
+        <small>
+          0.0.0.0 means "accept connections from any network interface".<br>
+          Default localhost (127.0.0.1) only accepts connections from the same machine.<br>
+          This one change makes the entire application network-accessible.
+        </small>
       </div>
     </div>
   </div>
