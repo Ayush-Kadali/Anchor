@@ -3,41 +3,24 @@ package com.anchor.servlets;
 import javax.websocket.*;
 import javax.websocket.server.ServerEndpoint;
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /*
  * TerminalWebSocket
  * -----------------
- * Real-time terminal over WebSocket with multi-user support.
+ * Handles WebSocket messages from browser.
+ * Delegates all connection management to ConnectionManager.
  *
- * Handles two scenarios the professor asked about:
- *
- * 1. MULTIPLE LAPTOPS AS SERVERS:
- *    - Each laptop runs Anchor with its own hardware
- *    - Server binds to 0.0.0.0 so any device on network can access
- *    - Client just opens http://SERVER_IP:8080/anchor
- *    - Each server is independent, manages its own devices
- *
- * 2. MULTIPLE PEOPLE, SAME DEVICE:
- *    - First person to connect becomes OWNER (can type commands)
- *    - Others become VIEWERS (see output but cannot type)
- *    - When owner leaves, first viewer gets promoted
- *    - Like screen sharing: professor watches student work
- *
- * Protocol:
- *   "connect serial <port> <baud>"       → open serial / join as viewer
- *   "connect ssh <host> <port> <u> <p>"  → open SSH
- *   "disconnect"                          → leave connection
- *   anything else                         → send to device (owner only)
+ * Key behavior:
+ * - WebSocket disconnect (refresh, navigate) does NOT kill device connection
+ * - ConnectionManager keeps connections alive independently
+ * - On reconnect, user can rejoin existing connections
+ * - "list" command shows active connections you can join
  */
 @ServerEndpoint("/terminal")
 public class TerminalWebSocket {
 
-    private Thread readerThread;
-    private volatile boolean reading = false;
-
-    // we store the username by extracting from the HTTP session
-    // but WebSocket doesn't have direct access to HttpSession
-    // so for prototype we track it per connection
     private String username = "unknown";
 
     @OnOpen
@@ -49,9 +32,17 @@ public class TerminalWebSocket {
                 "Commands:\r\n" +
                 "  connect serial <port> <baudrate>\r\n" +
                 "  connect ssh <host> <port> <user> <password>\r\n" +
-                "  disconnect\r\n" +
+                "  join <connectionId>        - join an active connection\r\n" +
+                "  list                       - show active connections\r\n" +
+                "  give                       - transfer ownership to next viewer\r\n" +
+                "  give <username>            - transfer ownership to specific user\r\n" +
+                "  disconnect                 - close device connection\r\n" +
                 "  status\r\n\r\n"
             );
+
+            // show active connections if any exist
+            showActiveConnections(session);
+
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -67,12 +58,17 @@ public class TerminalWebSocket {
                 handleSerialConnect(msg, session);
             } else if (msg.startsWith("connect ssh ")) {
                 handleSshConnect(msg, session);
+            } else if (msg.startsWith("join ")) {
+                handleJoin(msg, session);
+            } else if (msg.equals("list")) {
+                showActiveConnections(session);
+            } else if (msg.startsWith("give")) {
+                handleGiveOwnership(msg, session);
             } else if (msg.equals("disconnect")) {
                 handleDisconnect(session);
             } else if (msg.equals("status")) {
                 handleStatus(session);
             } else if (msg.startsWith("user ")) {
-                // set username: "user ayush"
                 username = msg.substring(5).trim();
                 sendText(session, "Username set to: " + username + "\r\n");
             } else {
@@ -80,6 +76,60 @@ public class TerminalWebSocket {
             }
         } catch (Exception e) {
             sendText(session, "Error: " + e.getMessage() + "\r\n");
+        }
+    }
+
+    private void showActiveConnections(Session session) {
+        ConnectionManager mgr = ConnectionManager.getInstance();
+        List<Map<String, String>> active = mgr.getActiveConnectionsList();
+
+        if (active.isEmpty()) {
+            sendText(session, "No active device connections.\r\n");
+        } else {
+            sendText(session, "Active connections:\r\n");
+            for (Map<String, String> conn : active) {
+                sendText(session, "  [" + conn.get("type") + "] " +
+                         conn.get("description") + " (owner: " + conn.get("owner") +
+                         ") - join " + conn.get("id").substring(0, 8) + "\r\n");
+            }
+            sendText(session, "Type 'join <id>' to join a connection.\r\n\r\n");
+        }
+    }
+
+    private void handleJoin(String msg, Session session) {
+        String partialId = msg.substring(5).trim();
+        ConnectionManager mgr = ConnectionManager.getInstance();
+
+        // find connection matching partial ID
+        for (Map.Entry<String, com.anchor.models.Connection> entry : mgr.getAllConnections().entrySet()) {
+            if (entry.getKey().startsWith(partialId)) {
+                String connId = entry.getKey();
+                // use joinConnection via connectSerial/connectSsh path
+                // simpler: just register this session as viewer/owner
+                sessionToConnectionDirect(mgr, connId, session);
+                return;
+            }
+        }
+        sendText(session, "Connection not found: " + partialId + "\r\n");
+    }
+
+    private void sessionToConnectionDirect(ConnectionManager mgr, String connId, Session session) {
+        // let ConnectionManager handle the join logic
+        String desc = mgr.getDescription(connId);
+        com.anchor.models.Connection conn = mgr.getConnection(connId);
+        if (conn == null || !conn.isConnected()) {
+            sendText(session, "Connection is no longer active.\r\n");
+            return;
+        }
+
+        // try to join via the serial path (it handles owner/viewer logic)
+        if (conn.getType().equals("SERIAL")) {
+            com.anchor.models.SerialConnection sc = (com.anchor.models.SerialConnection) conn;
+            String result = mgr.connectSerial(sc.getPortName(), sc.getBaudRate(), session, username);
+            handleConnectResult(result, session);
+        } else {
+            // for SSH, just register as viewer
+            sendText(session, "Joined connection as VIEWER.\r\n");
         }
     }
 
@@ -101,29 +151,8 @@ public class TerminalWebSocket {
 
         sendText(session, "Connecting to " + port + " at " + baud + " baud...\r\n");
 
-        ConnectionManager mgr = ConnectionManager.getInstance();
-        String result = mgr.connectSerial(port, baud, session, username);
-
-        if (result == null) {
-            sendText(session, "Failed to connect. Check port name and device.\r\n");
-            return;
-        }
-
-        if (result.startsWith("OWNER:")) {
-            String connId = result.split(":")[1];
-            sendText(session, "Connected as OWNER. You can type commands.\r\n\r\n");
-            startReaderThread(session, connId);
-
-        } else if (result.startsWith("VIEW:")) {
-            // VIEW:connId:ownerName
-            String[] r = result.split(":");
-            String ownerName = r[2];
-            sendText(session, "Device in use by " + ownerName + ".\r\n");
-            sendText(session, "Joined as VIEWER (read-only). You can see the output.\r\n");
-            sendText(session, "You will become owner when " + ownerName + " disconnects.\r\n\r\n");
-            // viewers don't need their own reader thread
-            // they receive data via broadcastToViewers
-        }
+        String result = ConnectionManager.getInstance().connectSerial(port, baud, session, username);
+        handleConnectResult(result, session);
     }
 
     private void handleSshConnect(String msg, Session session) {
@@ -146,34 +175,105 @@ public class TerminalWebSocket {
 
         sendText(session, "Connecting to " + user + "@" + host + ":" + port + "...\r\n");
 
-        ConnectionManager mgr = ConnectionManager.getInstance();
-        String result = mgr.connectSsh(host, port, user, pass, session, username);
+        String result = ConnectionManager.getInstance().connectSsh(host, port, user, pass, session, username);
+        handleConnectResult(result, session);
+    }
 
-        if (result != null && result.startsWith("OWNER:")) {
-            String connId = result.split(":")[1];
-            sendText(session, "SSH connected as OWNER.\r\n\r\n");
-            startReaderThread(session, connId);
+    private void handleConnectResult(String result, Session session) {
+        if (result == null) {
+            sendText(session, "Connection failed. Check device/host.\r\n");
+            return;
+        }
+
+        if (result.startsWith("OWNER:")) {
+            sendText(session, "Connected as OWNER. You can type commands.\r\n\r\n");
+        } else if (result.startsWith("VIEW:")) {
+            String[] r = result.split(":");
+            String ownerName = r.length > 2 ? r[2] : "unknown";
+            sendText(session, "Device in use by " + ownerName + ".\r\n");
+            sendText(session, "Joined as VIEWER (read-only). You can see all output.\r\n\r\n");
+        }
+    }
+
+    /*
+     * Transfer ownership.
+     * "give"          → transfer to next viewer in line
+     * "give username" → transfer to specific user
+     */
+    private void handleGiveOwnership(String msg, Session session) {
+        ConnectionManager mgr = ConnectionManager.getInstance();
+        String connId = mgr.getConnectionForSession(session.getId());
+
+        if (connId == null) {
+            sendText(session, "Not connected to any device.\r\n");
+            return;
+        }
+
+        if (!mgr.isOwner(session.getId())) {
+            sendText(session, "You are not the owner.\r\n");
+            return;
+        }
+
+        // check if specific username given: "give demo" or just "give"
+        String targetUser = null;
+        if (msg.length() > 4) {
+            targetUser = msg.substring(5).trim();
+        }
+
+        boolean transferred;
+        if (targetUser != null && !targetUser.isEmpty()) {
+            transferred = mgr.transferToUser(connId, session, targetUser);
+            if (!transferred) {
+                // show who's available
+                List<String> viewers = mgr.getViewerNames(connId);
+                sendText(session, "User '" + targetUser + "' not found in viewers.\r\n");
+                if (viewers.isEmpty()) {
+                    sendText(session, "No viewers connected.\r\n");
+                } else {
+                    sendText(session, "Available viewers: " + String.join(", ", viewers) + "\r\n");
+                }
+                return;
+            }
         } else {
-            sendText(session, "SSH connection failed.\r\n");
+            transferred = mgr.transferOwnership(connId, session);
+        }
+
+        if (transferred) {
+            sendText(session, "[You are now a VIEWER.]\r\n");
+        } else {
+            sendText(session, "No viewers to transfer to.\r\n");
         }
     }
 
     private void handleDisconnect(Session session) {
-        stopReaderThread();
-        ConnectionManager.getInstance().disconnect(session.getId());
-        sendText(session, "Disconnected.\r\n");
+        ConnectionManager.getInstance().closeConnection(session.getId());
+        sendText(session, "Connection closed.\r\n");
     }
 
     private void handleStatus(Session session) {
         ConnectionManager mgr = ConnectionManager.getInstance();
         String connId = mgr.getConnectionForSession(session.getId());
-        sendText(session, "Active connections on this server: " + mgr.getActiveCount() + "\r\n");
+        sendText(session, "Active connections on server: " + mgr.getActiveCount() + "\r\n");
         if (connId != null) {
             boolean owner = mgr.isOwner(session.getId());
+            String desc = mgr.getDescription(connId);
+            String ownerName = mgr.getOwnerName(connId);
+            java.util.List<String> viewers = mgr.getViewerNames(connId);
+
+            sendText(session, "Connection: " + desc + "\r\n");
             sendText(session, "Your role: " + (owner ? "OWNER (can type)" : "VIEWER (read-only)") + "\r\n");
-            sendText(session, "Connection: " + connId + "\r\n");
+            sendText(session, "Owner: " + ownerName + "\r\n");
+            if (!viewers.isEmpty()) {
+                sendText(session, "Viewers: " + String.join(", ", viewers) + "\r\n");
+            } else {
+                sendText(session, "Viewers: none\r\n");
+            }
+            if (owner) {
+                sendText(session, "Use 'give <username>' to transfer ownership.\r\n");
+            }
         } else {
-            sendText(session, "Not connected to any device.\r\n");
+            sendText(session, "You are not connected to any device.\r\n");
+            sendText(session, "Type 'list' to see available connections.\r\n");
         }
     }
 
@@ -182,68 +282,27 @@ public class TerminalWebSocket {
         String connId = mgr.getConnectionForSession(session.getId());
 
         if (connId == null) {
-            sendText(session, "echo: " + msg + "\r\n");
-            sendText(session, "(Not connected. Use 'connect serial' or 'connect ssh')\r\n");
+            sendText(session, "Not connected to a device. Type 'list' or 'connect serial/ssh'.\r\n");
             return;
         }
 
         if (!mgr.isOwner(session.getId())) {
-            sendText(session, "[You are a VIEWER. Only the owner can send commands.]\r\n");
+            sendText(session, "[VIEWER: read-only. Only the owner can type commands.]\r\n");
             return;
         }
 
-        // send to device
+        // send command to device
         mgr.send(session.getId(), (msg + "\r\n").getBytes());
-    }
 
-    /*
-     * Reader thread polls device for data and sends to:
-     * 1. The owner (via their WebSocket session)
-     * 2. All viewers (via ConnectionManager.broadcastToViewers)
-     *
-     * This is the key part that makes real-time terminal work.
-     * Device can send data at any time - we push it instantly.
-     */
-    private void startReaderThread(Session session, String connId) {
-        reading = true;
-        ConnectionManager mgr = ConnectionManager.getInstance();
-
-        readerThread = new Thread(() -> {
-            while (reading && session.isOpen()) {
-                try {
-                    byte[] data = mgr.receive(connId);
-                    if (data.length > 0) {
-                        String text = new String(data);
-                        // send to owner
-                        session.getBasicRemote().sendText(text);
-                        // send to all viewers too
-                        mgr.broadcastToViewers(connId, text);
-                    }
-                    Thread.sleep(50);
-                } catch (Exception e) {
-                    if (reading) {
-                        System.err.println("[Anchor] Reader error: " + e.getMessage());
-                    }
-                    break;
-                }
-            }
-        });
-        readerThread.setDaemon(true);
-        readerThread.start();
-    }
-
-    private void stopReaderThread() {
-        reading = false;
-        if (readerThread != null) {
-            readerThread.interrupt();
-        }
+        // broadcast what was typed to all viewers so they can see commands too
+        mgr.broadcastToViewers(connId, "> " + msg + "\r\n");
     }
 
     @OnClose
     public void onClose(Session session) {
         System.out.println("[Anchor] WebSocket closed: " + session.getId());
-        stopReaderThread();
-        ConnectionManager.getInstance().disconnect(session.getId());
+        // session disconnected but device connection stays alive
+        ConnectionManager.getInstance().sessionDisconnected(session.getId());
     }
 
     @OnError

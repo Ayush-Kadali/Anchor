@@ -58,24 +58,24 @@ public class DbTestServlet extends HttpServlet {
             // Step 1: Load MySQL driver
             // this tells Java "we want to use MySQL"
             Class.forName("com.mysql.cj.jdbc.Driver");
-            out.println("<p>&#9989; MySQL Driver loaded successfully</p>");
+            out.println("<p>[OK] MySQL Driver loaded successfully</p>");
 
             // Step 2: Try to connect
             out.println("<p>Attempting connection to: " + DB_URL + "</p>");
             conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
 
             if (conn != null && !conn.isClosed()) {
-                out.println("<p style='color:green'>&#9989; <b>Database connected successfully!</b></p>");
+                out.println("<p style='color:green'>[OK] <b>Database connected successfully!</b></p>");
                 out.println("<p>Database: " + conn.getCatalog() + "</p>");
             }
 
         } catch (ClassNotFoundException e) {
             // driver jar not found - but we have it in pom.xml so this shouldn't happen
-            out.println("<p style='color:red'>&#10060; MySQL Driver not found: " + e.getMessage() + "</p>");
+            out.println("<p style='color:red'>[FAIL] MySQL Driver not found: " + e.getMessage() + "</p>");
 
         } catch (SQLException e) {
             // connection failed - probably MySQL isn't running, which is fine
-            out.println("<p style='color:orange'>&#9888; Connection failed: " + e.getMessage() + "</p>");
+            out.println("<p style='color:orange'>[WARN] Connection failed: " + e.getMessage() + "</p>");
             out.println("<p><i>This is expected if MySQL is not running.</i></p>");
             out.println("<p><i>The JDBC driver loaded successfully, which proves our setup works.</i></p>");
             out.println("<p><i>When MySQL is set up, this will connect automatically.</i></p>");
