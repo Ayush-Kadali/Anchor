@@ -54,8 +54,11 @@ public class SshConnection extends Connection {
             // Connect with timeout
             session.connect(10000);
 
-            // Open shell channel
+            // Open shell channel with pseudo-terminal
+            // PTY is needed for interactive shell (colors, line editing, etc.)
             channel = session.openChannel("shell");
+            ((com.jcraft.jsch.ChannelShell) channel).setPty(true);
+            ((com.jcraft.jsch.ChannelShell) channel).setPtyType("vt100");
             inputStream = channel.getInputStream();
             outputStream = channel.getOutputStream();
             channel.connect(5000);

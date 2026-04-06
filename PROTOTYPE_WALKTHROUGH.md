@@ -1,268 +1,302 @@
 # Anchor Prototype - Walkthrough Notes
 
-Read this before the demo. It explains what each part does and what to say.
+Read this before the demo. Follow the demo script in order.
 
-## How to Start the Demo
+## How to Start
 
 ```bash
 cd anchor
 mvn jetty:run
 ```
+
 Open: http://localhost:8080/anchor
 
-## Demo Script (Follow This Order)
+From another device on the same network: http://YOUR_IP:8080/anchor
 
 ---
 
-### 1. LOGIN PAGE
+## All Files in the Project
 
-**What opens:** A simple login form. Nothing fancy.
+```
+anchor/src/main/java/com/anchor/
+  models/
+    Connection.java          - Abstract base class (OOP)
+    SerialConnection.java    - USB serial via jSerialComm
+    SshConnection.java       - SSH via JSch
+    User.java                - User model with SHA-256 hashing
+  servlets/
+    AuthenticationFilter.java - Blocks unauthorized requests
+    ConnectionManager.java    - Singleton managing all device connections
+    DbTestServlet.java        - JDBC connection test
+    DeviceScannerServlet.java - REST API listing serial ports
+    LoginServlet.java         - Login authentication
+    LogoutServlet.java        - Session destruction
+    RegisterServlet.java      - User registration
+    TerminalWebSocket.java    - Real-time terminal with owner/viewer
 
-**What to show:**
-- The page is `login.jsp` - a JSP file (HTML with Java inside)
-- There's a link to "Create new account" (registration)
-- Demo credentials are shown: admin / admin123
+anchor/src/main/webapp/
+    WEB-INF/web.xml          - URL routing and filter config
+    css/style.css            - Styling
+    dashboard.jsp            - Main page with terminal
+    index.jsp                - Entry point redirect
+    login.jsp                - Login form
+    register.jsp             - Registration form
 
-**What to explain:**
-> "When you open the app, `index.jsp` runs first. It checks if you have a session.
-> Since you don't, it redirects to `login.jsp`. This redirect is done by the
-> AuthenticationFilter - a Servlet Filter that intercepts ALL requests and checks
-> if you're logged in."
-
-**Show the code:** Open `AuthenticationFilter.java`
-> "See here - `doFilter()` runs before every request. It checks the URI - if it's
-> the login page, CSS, or an API call, it lets it through. For everything else,
-> it checks `session.getAttribute("user")`. If null, you get redirected to login."
-
----
-
-### 2. REGISTRATION (Create New Account)
-
-**Click:** "Create new account" link
-
-**What to show:**
-- Simple form: username, password, confirm password
-- Register a new user like "testuser" / "test123"
-
-**What to explain:**
-> "This form POSTs to `/register` which maps to `RegisterServlet`.
-> The servlet validates: are fields empty? Do passwords match? Is username taken?
-> Then it creates a `new User()` - and THIS is where the hashing happens."
-
-**Show the code:** Open `User.java` constructor
-> "Look at the constructor. When we create `new User("testuser", "test123", "USER")`,
-> it calls `generateSalt()` which uses `SecureRandom` to make 16 random bytes,
-> then `hashPassword()` which takes the password + salt, runs it through
-> `MessageDigest.getInstance("SHA-256")`, and stores only the hash.
-> The plain password is NEVER stored anywhere."
-
-**After registering:** You get redirected to login with "Registration successful!"
+pom.xml                      - Maven dependencies and build
+```
 
 ---
 
-### 3. LOGIN WITH NEW USER
+## Demo Script
 
-**Login with:** testuser / test123
+### 1. LOGIN
 
-**What to explain:**
-> "The form POSTs to `/login` → `LoginServlet.doPost()`.
-> It gets the username from `request.getParameter("username")`.
-> Looks up the User object from our HashMap.
-> Calls `user.verifyPassword("test123")` which:
-> 1. Gets the stored salt
-> 2. Hashes the entered password with that salt
-> 3. Compares with stored hash
-> 4. If they match → create HttpSession, store username and role
-> 5. `session.setMaxInactiveInterval(1800)` = 30 minute timeout
-> 6. Redirect to dashboard"
+Open http://localhost:8080/anchor
+
+What happens behind the scenes:
+1. Browser requests /anchor/
+2. Tomcat serves index.jsp (welcome-file in web.xml)
+3. AuthenticationFilter runs first (url-pattern /*)
+4. Filter sees login.jsp in URI, lets it through
+5. index.jsp checks session - no user, redirects to login.jsp
+
+Login with: admin / admin123
+
+What happens:
+1. Form POSTs to /login
+2. AuthenticationFilter lets /login through
+3. LoginServlet.doPost() runs
+4. request.getParameter("username") gets "admin"
+5. HashMap lookup: users.get("admin")
+6. user.verifyPassword("admin123"):
+   - Gets stored salt
+   - SHA-256("admin123" + salt) via MessageDigest
+   - Compares with stored hash
+   - Match!
+7. Creates HttpSession, stores user and role
+8. sendRedirect to dashboard.jsp
 
 ---
 
-### 4. DASHBOARD - DEVICE SCANNING
+### 2. REGISTRATION
 
-**What shows:** Dashboard with device list on left, terminal on right.
+Click "Create new account" on login page.
 
-**What to show:**
-- Session info in header (username, role, session ID)
-- "Scan for Devices" button → click it
+Enter: testuser / test123 / test123
 
-**What to explain:**
-> "The device list calls `fetch('api/devices')` - that's JavaScript making an AJAX
-> request to our `DeviceScannerServlet`. The servlet calls
-> `SerialPort.getCommPorts()` from the jSerialComm library. This talks to the
-> operating system to find all connected USB serial ports. It builds a JSON
-> response and sends it back. The JavaScript parses that JSON and updates the page."
+What happens:
+1. Form POSTs to /register
+2. RegisterServlet.doPost() validates:
+   - Fields empty? No
+   - Passwords match? Yes
+   - Username taken? No (LoginServlet.userExists() checks HashMap)
+3. new User("testuser", "test123", "USER"):
+   - generateSalt() creates 16 random bytes via SecureRandom
+   - hashPassword() runs SHA-256 on "test123" + salt
+   - Stores ONLY hash and salt, never plain password
+4. LoginServlet.addUser(user) adds to HashMap
+5. Redirects to login.jsp?registered=true
+6. login.jsp sees ?registered=true parameter, shows success message
 
-**Show the code:** Open `DeviceScannerServlet.java`
-> "See - `response.setContentType("application/json")` tells the browser this is
-> JSON, not HTML. We loop through all ports, build the JSON string with
-> StringBuilder, and write it with `PrintWriter`. The `escapeJson()` method
-> prevents injection attacks."
+---
 
-**If no devices found:**
-> "That's normal - there's no USB serial device plugged in right now.
-> The servlet still works - it returns `{"devices":[], "count":0}`.
-> If we plug in an Arduino and scan again, it would show up."
+### 3. AUTH FILTER
+
+After logging out, try accessing dashboard.jsp directly in the URL bar.
+
+What happens:
+1. Request for /dashboard.jsp
+2. AuthenticationFilter.doFilter() runs
+3. URI is not login/register/css/api
+4. session.getAttribute("user") is null (logged out)
+5. Redirects to login.jsp
+6. User is blocked from accessing protected pages
+
+---
+
+### 4. DEVICE SCANNING
+
+On the dashboard, click "Scan for Devices"
+
+What happens:
+1. JavaScript: fetch('api/devices') - AJAX call, no page reload
+2. DeviceScannerServlet.doGet() runs:
+   - response.setContentType("application/json")
+   - SerialPort.getCommPorts() - jSerialComm asks OS for serial ports
+   - Loops through ports, builds JSON with StringBuilder
+   - Returns: {"devices":[...], "count": N, "status": "success"}
+3. JavaScript parses JSON, builds HTML, updates device list div
+4. If device found, clicking it fills the port field
 
 ---
 
 ### 5. WEBSOCKET TERMINAL
 
-**Click:** "Connect WebSocket" button
+Click "Connect WebSocket"
 
-**What shows:** Terminal connects, shows welcome message.
+What happens:
+1. JavaScript: new WebSocket('ws://host/anchor/terminal')
+2. TerminalWebSocket.java @OnOpen fires
+3. Sends welcome message
+4. JavaScript ws.onmessage displays it
+5. Input box becomes enabled
+6. JavaScript sends "user <username>" to identify this session
 
-**What to do:** Type something in the input box, press Enter.
-
-**What to explain:**
-> "This is a WebSocket connection - different from HTTP. HTTP is request-response:
-> browser asks, server answers. WebSocket is bidirectional: both sides can send
-> anytime. We need this for a terminal because:
-> - When I type a key, it needs to go to the device instantly
-> - When the device sends output, it needs to appear in the browser instantly
-> - HTTP would be too slow - you'd have to keep polling
->
-> Our `TerminalWebSocket.java` uses the `@ServerEndpoint("/terminal")` annotation.
-> When the browser connects, `onOpen()` fires. When the browser sends text,
-> `onMessage()` fires. Right now it just echoes back - in the full version,
-> this is where we'd forward to `SerialConnection.send()` or `SshConnection.send()`."
-
-**Show the code:** Open `TerminalWebSocket.java`
-> "See the annotations: `@OnOpen`, `@OnMessage`, `@OnClose`, `@OnError`.
-> These are from JSR 356 - Java's WebSocket API. The container (Jetty/Tomcat)
-> calls these methods automatically when events happen."
+Now type "status" and press Enter:
+1. JavaScript: ws.send("status")
+2. TerminalWebSocket @OnMessage fires
+3. Calls handleStatus() which queries ConnectionManager
+4. Sends back: active connections count, your role
 
 ---
 
-### 6. SERIAL / SSH CONNECTION ATTEMPT
+### 6. SERIAL CONNECTION
 
-**Click:** Serial tab → enter any port name → click "Connect Serial"
+Enter a port name (e.g., COM3 or /dev/ttyUSB0), select baud rate, click "Connect Serial"
 
-**What shows:** Terminal shows what Java code WOULD execute.
-
-**What to explain:**
-> "Right now this shows what the connection code does step by step.
-> The actual `SerialConnection.java` is written and compiles - it extends our
-> abstract `Connection` class. Let me show you the class hierarchy."
-
-**Show the code:** Open `Connection.java`, `SerialConnection.java`, `SshConnection.java`
-> "Connection is abstract - it defines connect(), disconnect(), send(), receive().
-> You can't do `new Connection()` - you MUST use a subclass.
-> SerialConnection uses jSerialComm to talk to USB ports.
-> SshConnection uses JSch to talk to SSH servers.
-> Both override the same methods with different implementations.
-> This is polymorphism - same method name, different behavior."
-
----
-
-### 7. DATABASE TEST
-
-**Click:** "Test DB Connection" link in header
-
-**What shows:** Page showing JDBC driver loaded, connection attempt result.
-
-**What to explain:**
-> "This calls `DbTestServlet`. It does three things:
-> 1. `Class.forName("com.mysql.cj.jdbc.Driver")` - loads the MySQL JDBC driver
-> 2. `DriverManager.getConnection(url, user, pass)` - tries to connect
-> 3. Handles the result in try-catch-finally
->
-> The driver loads successfully because we have mysql-connector in pom.xml.
-> The connection fails because MySQL isn't running here - that's expected.
-> The point is: the JDBC code works, the driver loads, and we handle errors
-> properly with try-catch-finally. The finally block always closes the connection."
+What happens:
+1. JavaScript sends: "connect serial COM3 9600"
+2. TerminalWebSocket.handleSerialConnect() parses the command
+3. Calls ConnectionManager.connectSerial("COM3", 9600, session, username):
+   - Checks portToConnection map - is this port already in use?
+   - If YES: adds this user as VIEWER (read-only)
+   - If NO: creates new SerialConnection("COM3", 9600)
+     - SerialConnection.connect():
+       - SerialPort.getCommPort("COM3") via jSerialComm
+       - serialPort.setBaudRate(9600)
+       - serialPort.openPort()
+       - connected = true
+     - Stores in connections map
+     - This user becomes OWNER
+4. Starts reader thread:
+   - Runs in background
+   - Every 50ms: calls connection.receive()
+   - If data: pushes to owner via WebSocket
+   - Also broadcasts to all viewers via broadcastToViewers()
+5. User types commands → ws.send() → ConnectionManager.send() → serialPort.writeBytes()
+6. Device responds → reader thread gets data → ws.sendText() → browser displays
 
 ---
 
-### 8. LOGOUT
+### 7. MULTI-USER (OWNER/VIEWER)
 
-**Click:** Logout link
+When two people connect to the same serial port:
 
-**What to explain:**
-> "`LogoutServlet` calls `session.invalidate()` - this destroys the session
-> on the server. The session cookie in the browser becomes invalid.
-> Then it redirects to login page."
+Person 1: "connect serial COM3 9600"
+  - Port is free → ConnectionManager creates SerialConnection
+  - Person 1 becomes OWNER (can type commands)
+  - Reader thread starts, pushes device output to Person 1
 
-**Try accessing dashboard directly:** Type /anchor/dashboard.jsp in URL bar
-> "See - it redirects to login. That's the AuthenticationFilter working.
-> It checked the session, found no user, and redirected."
+Person 2: "connect serial COM3 9600"
+  - Port already in use → ConnectionManager sees existing connection
+  - Person 2 becomes VIEWER (read-only)
+  - Receives same device output via broadcastToViewers()
+  - Cannot send commands (send() checks isOwner())
+  - Gets message: "Device in use by Person1. Joined as viewer."
 
----
-
-### 9. WEB.XML WALKTHROUGH
-
-**Open:** `web.xml`
-
-> "This is the deployment descriptor. It tells the server:
-> - Which URLs go to which servlets (servlet-mapping)
-> - Which filters run on which URLs (filter-mapping)
-> - Session timeout (30 minutes)
-> - Welcome file (index.jsp)
->
-> For example: `<url-pattern>/login</url-pattern>` → `LoginServlet`
-> means when someone visits /login, Java runs LoginServlet.
->
-> The filter has `<url-pattern>/*</url-pattern>` which means
-> it runs on EVERY request."
+Person 1 disconnects:
+  - ConnectionManager.disconnect() runs
+  - Checks if viewers exist
+  - Promotes first viewer (Person 2) to OWNER
+  - Person 2 can now type commands
+  - Gets message: "You are now the OWNER."
 
 ---
 
-### 10. POM.XML WALKTHROUGH
+### 8. NETWORK ACCESS
 
-**Open:** `pom.xml`
+The server shows its IP address in the dashboard header and sidebar.
 
-> "This is Maven's config. It lists every library we need:
-> - `javax.servlet-api` (scope: provided) - Tomcat has this, don't include in WAR
-> - `jSerialComm` - talks to USB serial ports
-> - `jsch` - SSH connections
-> - `mysql-connector-java` - JDBC driver
-> - `javax.websocket-api` (scope: provided) - WebSocket support
->
-> When we run `mvn package`, Maven downloads all these from Maven Central,
-> compiles our Java code, and creates anchor.war - a deployable archive."
+From another laptop on the same WiFi:
+  Open: http://SERVER_IP:8080/anchor
+  Login with same credentials
+  Connect to devices on the server's machine
+
+Jetty binds to 0.0.0.0 (all network interfaces) so any device
+on the network can access it.
 
 ---
 
-## What Each File Does (Quick Reference)
+### 9. SSH CONNECTION
 
-| File | Purpose | Java Concepts |
-|------|---------|---------------|
-| `Connection.java` | Abstract base for connections | abstract class, abstract methods, protected |
-| `SerialConnection.java` | USB serial via jSerialComm | extends, @Override, library integration |
-| `SshConnection.java` | SSH via JSch | extends, InputStream/OutputStream |
-| `User.java` | User model + password hashing | encapsulation, MessageDigest, SecureRandom |
-| `LoginServlet.java` | Login handling | HttpServlet, doGet/doPost, HttpSession |
-| `LogoutServlet.java` | Session destruction | session.invalidate() |
-| `RegisterServlet.java` | User registration | Input validation, redirect |
-| `AuthenticationFilter.java` | Security guard on all requests | javax.servlet.Filter, FilterChain |
-| `DeviceScannerServlet.java` | REST API for device listing | JSON response, jSerialComm |
-| `TerminalWebSocket.java` | Real-time terminal | @ServerEndpoint, WebSocket API |
-| `DbTestServlet.java` | JDBC connection test | DriverManager, try-catch-finally |
-| `web.xml` | URL → Servlet mapping | Deployment descriptor |
-| `pom.xml` | Dependencies + build | Maven |
-| `index.jsp` | Entry redirect | Session check |
-| `login.jsp` | Login form | JSP scriptlets, expressions |
-| `register.jsp` | Registration form | Form handling |
-| `dashboard.jsp` | Main dashboard | Session data, JavaScript, AJAX |
+Switch to SSH tab, enter host/port/user, click "Connect SSH"
 
-## If Professor Asks...
+What happens:
+1. JavaScript sends: "connect ssh 192.168.1.1 22 root password"
+2. TerminalWebSocket.handleSshConnect() parses it
+3. ConnectionManager.connectSsh() creates SshConnection:
+   - jsch.getSession(user, host, port)
+   - session.setPassword(password)
+   - session.connect(10000) - 10 second timeout
+   - session.openChannel("shell")
+   - Gets InputStream and OutputStream
+4. Reader thread reads from SSH inputStream
+5. User types → outputStream.write() → remote server
+6. Polymorphism: same ConnectionManager.send()/receive() works
+   because both SerialConnection and SshConnection extend Connection
 
-**"Why in-memory storage, not database?"**
-> "This is the prototype. We have the JDBC code ready (DbTestServlet proves it works).
-> The User class is designed so we just swap HashMap for a UserDAO class that uses
-> PreparedStatement. The User object stays the same."
+---
 
-**"Why is the terminal just echoing?"**
-> "The WebSocket endpoint works. The Connection classes work. The next step is
-> bridging them - when WebSocket receives text, forward to Connection.send(),
-> and when Connection.receive() gets data, push through WebSocket to browser."
+### 10. DATABASE TEST
 
-**"Why no HTTPS?"**
-> "Development environment. In production we'd add an SSL certificate and use
-> a Servlet Filter to redirect HTTP to HTTPS. The Filter pattern is the same
-> as our AuthenticationFilter."
+Click "Test DB" link in header
 
-**"What's the point if minicom already exists?"**
-> "minicom is one device, one terminal, one machine. Anchor is multi-device,
-> web-accessible, authenticated, with session history. The real value is in
-> lab environments where a professor controls access to shared hardware."
+What happens:
+1. GET /dbtest → DbTestServlet.doGet()
+2. Class.forName("com.mysql.cj.jdbc.Driver") loads JDBC driver
+3. DriverManager.getConnection() tries to connect to MySQL
+4. If MySQL running: shows "Connected!"
+5. If not running: shows "Connection failed" but proves driver loads
+6. finally block always runs: conn.close() to prevent resource leak
+
+---
+
+## Architecture Summary
+
+```
+Browser (Laptop B)
+  │
+  ├── HTTP GET/POST ──→ AuthenticationFilter ──→ Servlets
+  │                                                │
+  │                                          LoginServlet
+  │                                          RegisterServlet
+  │                                          DeviceScannerServlet
+  │                                          DbTestServlet
+  │
+  └── WebSocket ──→ TerminalWebSocket
+                          │
+                    ConnectionManager (Singleton)
+                          │
+                    ┌─────┴──────┐
+                    │            │
+              SerialConnection  SshConnection
+              (jSerialComm)     (JSch)
+                    │            │
+              USB Device      Remote Server
+              (on this laptop)
+```
+
+---
+
+## Java Concepts Demonstrated
+
+| Concept | File | How |
+|---------|------|-----|
+| Abstract class | Connection.java | Cannot instantiate, defines contract |
+| Inheritance | SerialConnection, SshConnection | extends Connection |
+| Polymorphism | ConnectionManager | Same send()/receive() for both types |
+| Encapsulation | User.java | Private fields, no setPasswordHash() |
+| Singleton | ConnectionManager | One instance, private constructor |
+| Factory-like | ConnectionManager | Creates right Connection type |
+| Observer-like | broadcastToViewers() | Push to all viewers |
+| Filter pattern | AuthenticationFilter | Intercept before servlet |
+| Thread safety | ConcurrentHashMap | Multiple WebSocket threads |
+| Daemon threads | Reader thread | Auto-stops when server stops |
+| SHA-256 | User.java | MessageDigest for password hashing |
+| SecureRandom | User.java | Cryptographic salt generation |
+| JDBC | DbTestServlet | Database connectivity |
+| WebSocket | TerminalWebSocket | Real-time bidirectional |
+| Servlet lifecycle | LoginServlet | init(), doGet(), doPost() |
+| Session management | LoginServlet, Filter | HttpSession |
+| REST API | DeviceScannerServlet | JSON response |
+| Maven | pom.xml | Dependency management |
