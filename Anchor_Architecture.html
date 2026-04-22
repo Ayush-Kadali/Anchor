@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anchor - Project Architecture</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #f8f9fa;
+    color: #2c3e50;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: linear-gradient(135deg, #1a2a3a 0%, #2c3e50 100%);
+    color: #fff;
+    padding: 28px 32px 18px;
+    text-align: center;
+  }
+  .header h1 { font-size: 26px; letter-spacing: 1px; font-weight: 700; }
+  .header h1 span { color: #5dade2; }
+  .header .subtitle { font-size: 13px; color: #aab7c4; margin-top: 4px; }
+  .header .team {
+    margin-top: 10px; font-size: 11.5px; color: #8899aa;
+    display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;
+  }
+
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex; flex-wrap: wrap;
+    background: #fff;
+    border-bottom: 2px solid #dee2e6;
+    padding: 0 16px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,.06);
+  }
+  .tab-btn {
+    padding: 12px 20px;
+    border: none; background: none;
+    font-size: 13px; font-weight: 600;
+    color: #6c757d; cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all .15s;
+  }
+  .tab-btn:hover { color: #2c3e50; background: #f0f4f8; }
+  .tab-btn.active { color: #2980b9; border-bottom-color: #2980b9; }
+
+  .tab-content { display: none; padding: 32px; max-width: 1100px; margin: 0 auto; }
+  .tab-content.active { display: block; }
+  .tab-content h2 { font-size: 20px; margin-bottom: 20px; color: #2c3e50; border-bottom: 2px solid #e9ecef; padding-bottom: 8px; }
+
+  /* ── Shared box styles ── */
+  .box {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 8px 14px; border-radius: 6px;
+    font-size: 12.5px; font-weight: 600;
+    border: 2px solid; text-align: center;
+    min-width: 90px;
+  }
+  .planned { border-style: dashed !important; background: #fff8e1 !important; }
+
+  /* ── TAB 1 ── */
+  .layer {
+    border-radius: 10px; padding: 20px; margin-bottom: 20px;
+    border: 2px solid;
+  }
+  .layer-title {
+    font-size: 14px; font-weight: 700; margin-bottom: 14px;
+    text-transform: uppercase; letter-spacing: .8px;
+  }
+  .layer-client  { border-color: #dae8fc; background: #f0f7ff; }
+  .layer-app     { border-color: #d5e8d4; background: #f0fff0; }
+  .layer-ext     { border-color: #f8cecc; background: #fff5f5; }
+
+  .box-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+
+  .box-client { border-color: #5b9bd5; background: #dae8fc; color: #1a4e7e; }
+  .box-app    { border-color: #6aaf6a; background: #d5e8d4; color: #2d5e2d; }
+  .box-ext    { border-color: #d46a6a; background: #f8cecc; color: #6e2c2c; }
+  .box-purple { border-color: #9b59b6; background: #f3e5f5; color: #5b2c6f; }
+  .box-yellow { border-color: #e6b800; background: #fff8e1; color: #7a6200; }
+
+  .section-label {
+    font-size: 11px; font-weight: 700; color: #555;
+    text-transform: uppercase; letter-spacing: .6px;
+    margin: 12px 0 8px; padding-bottom: 4px;
+    border-bottom: 1px solid rgba(0,0,0,.08);
+  }
+
+  .protocol-bar {
+    display: flex; gap: 14px; margin-top: 14px;
+    padding-top: 10px; border-top: 1px dashed #c0d4e8;
+  }
+  .protocol-tag {
+    font-size: 11px; font-weight: 600;
+    padding: 3px 10px; border-radius: 4px;
+    background: #e6f0fa; color: #34688f;
+    border: 1px solid #b8d4ea;
+  }
+
+  .arrow-down-container { text-align: center; margin: 4px 0; }
+  .arrow-down {
+    display: inline-block; width: 0; height: 0;
+    border-left: 14px solid transparent; border-right: 14px solid transparent;
+    border-top: 16px solid #bbb;
+  }
+  .arrow-label { font-size: 10px; color: #888; font-weight: 600; }
+
+  .inherit-note {
+    margin-top: 12px; font-size: 11.5px; color: #555;
+    padding: 6px 10px; background: #e8f5e9; border-radius: 4px;
+    display: inline-block; border: 1px solid #c8e6c9;
+  }
+
+  /* ── TAB 2 – Login Flow ── */
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .flow-step {
+    padding: 10px 22px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; text-align: center;
+    border: 2px solid; min-width: 260px; max-width: 420px;
+  }
+  .flow-oval { border-radius: 40px; }
+  .flow-diamond {
+    transform: rotate(0deg);
+    border-radius: 4px;
+    background: #fff3e0; border-color: #e6a200; color: #7a5500;
+    position: relative;
+    padding: 10px 28px;
+  }
+  .flow-diamond::before {
+    content: ''; position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+    width: 12px; height: 12px; background: #e6a200;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  }
+  .flow-blue   { background: #e3f2fd; border-color: #5b9bd5; color: #1a4e7e; }
+  .flow-green  { background: #e8f5e9; border-color: #66bb6a; color: #2e7d32; }
+  .flow-red    { background: #ffebee; border-color: #e57373; color: #b71c1c; }
+  .flow-purple { background: #f3e5f5; border-color: #ab47bc; color: #6a1b9a; }
+  .flow-gray   { background: #f5f5f5; border-color: #bdbdbd; color: #424242; }
+  .flow-arrow {
+    width: 2px; height: 22px; background: #999; position: relative;
+  }
+  .flow-arrow::after {
+    content: ''; position: absolute; bottom: -5px; left: -4px;
+    width: 0; height: 0;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 6px solid #999;
+  }
+  .flow-branch {
+    display: flex; align-items: flex-start; gap: 30px; justify-content: center;
+    margin: 4px 0;
+  }
+  .flow-branch-arm {
+    display: flex; flex-direction: column; align-items: center; gap: 0;
+  }
+  .branch-label { font-size: 11px; font-weight: 700; color: #888; margin-bottom: 2px; }
+
+  /* ── TAB 3 – UML ── */
+  .uml-container { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; align-items: flex-start; }
+  .uml-box {
+    border: 2px solid; border-radius: 6px; min-width: 260px; max-width: 320px;
+    background: #fff; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .uml-box.abstract { border-width: 3px; }
+  .uml-header {
+    padding: 8px 12px; font-weight: 700; font-size: 13px;
+    text-align: center; border-bottom: 2px solid;
+  }
+  .uml-section {
+    padding: 8px 12px; font-size: 12px; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  .uml-section:last-child { border-bottom: none; }
+  .uml-section .abstract-method { font-style: italic; }
+  .uml-green  { border-color: #4caf50; }
+  .uml-green .uml-header { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+  .uml-purple { border-color: #9c27b0; }
+  .uml-purple .uml-header { background: #f3e5f5; border-color: #9c27b0; color: #6a1b9a; }
+
+  .uml-arrows {
+    text-align: center; margin: 20px 0 10px;
+    font-size: 12px; color: #666;
+  }
+  .uml-legend {
+    margin-top: 20px; padding: 12px 16px;
+    background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;
+    font-size: 12px; display: flex; gap: 20px; flex-wrap: wrap;
+  }
+  .uml-legend span { font-family: monospace; }
+
+  /* ── TAB 4 – Hashing ── */
+  .hash-flow-row {
+    display: flex; align-items: center; gap: 0;
+    flex-wrap: wrap; margin-bottom: 24px;
+    justify-content: center;
+  }
+  .hash-box {
+    padding: 10px 16px; border-radius: 6px; font-size: 12.5px;
+    font-weight: 600; border: 2px solid; text-align: center;
+    white-space: nowrap;
+  }
+  .hash-arrow {
+    width: 30px; height: 2px; background: #999; position: relative;
+    flex-shrink: 0; margin: 0 -1px;
+  }
+  .hash-arrow::after {
+    content: ''; position: absolute; right: -5px; top: -4px;
+    width: 0; height: 0;
+    border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+    border-left: 6px solid #999;
+  }
+  .hash-input   { background: #e3f2fd; border-color: #5b9bd5; color: #1a4e7e; }
+  .hash-process { background: #e8f5e9; border-color: #66bb6a; color: #2e7d32; }
+  .hash-algo    { background: #f3e5f5; border-color: #ab47bc; color: #6a1b9a; }
+  .hash-output  { background: #fff3e0; border-color: #ffa726; color: #e65100; }
+  .hash-stored  { background: #ffebee; border-color: #e57373; color: #b71c1c; }
+
+  .hash-note {
+    margin-top: 10px; padding: 10px 16px;
+    background: #fff8e1; border: 2px dashed #e6b800;
+    border-radius: 6px; font-size: 12.5px; font-weight: 600;
+    text-align: center; color: #7a5500;
+  }
+
+  .flow-label {
+    font-size: 14px; font-weight: 700; margin-bottom: 10px;
+    color: #2c3e50; text-align: center;
+  }
+
+  /* ── TAB 5 – Servlet Mapping ── */
+  .mapping-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px; background: #fff;
+    border-radius: 8px; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .mapping-table th {
+    background: #2c3e50; color: #fff; padding: 10px 14px;
+    text-align: left; font-size: 12px; text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .mapping-table td {
+    padding: 9px 14px; border-bottom: 1px solid #eee;
+    vertical-align: top;
+  }
+  .mapping-table tr:last-child td { border-bottom: none; }
+  .mapping-table tr:hover td { background: #f8f9fa; }
+  .method-get  { color: #2e7d32; font-weight: 700; }
+  .method-post { color: #1565c0; font-weight: 700; }
+  .method-ws   { color: #6a1b9a; font-weight: 700; }
+  .mapping-table code {
+    background: #f0f4f8; padding: 2px 6px; border-radius: 3px;
+    font-size: 12px; font-family: 'Cascadia Code', 'Fira Code', monospace;
+  }
+  .filter-note {
+    margin-top: 16px; padding: 12px 16px;
+    background: #fff3e0; border: 2px solid #ffa726; border-radius: 8px;
+    font-size: 13px; font-weight: 600; color: #e65100;
+  }
+
+  /* ── TAB 6 – Tech Stack ── */
+  .stack-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 700px) { .stack-grid { grid-template-columns: 1fr; } }
+  .stack-card {
+    border: 2px solid; border-radius: 10px; overflow: hidden;
+    background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .stack-card-header {
+    padding: 10px 16px; font-weight: 700; font-size: 13px;
+    text-transform: uppercase; letter-spacing: .6px;
+  }
+  .stack-card-body { padding: 12px 16px; }
+  .stack-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid #f0f0f0;
+    font-size: 12.5px;
+  }
+  .stack-item:last-child { border-bottom: none; }
+  .stack-item .pkg {
+    font-family: monospace; font-size: 11px;
+    color: #888; background: #f4f4f4; padding: 1px 6px;
+    border-radius: 3px;
+  }
+
+  .sc-client  { border-color: #5b9bd5; }
+  .sc-client .stack-card-header { background: #e3f2fd; color: #1a4e7e; border-bottom: 2px solid #5b9bd5; }
+  .sc-server  { border-color: #66bb6a; }
+  .sc-server .stack-card-header { background: #e8f5e9; color: #2e7d32; border-bottom: 2px solid #66bb6a; }
+  .sc-lib     { border-color: #ffa726; }
+  .sc-lib .stack-card-header { background: #fff3e0; color: #e65100; border-bottom: 2px solid #ffa726; }
+  .sc-sec     { border-color: #ab47bc; }
+  .sc-sec .stack-card-header { background: #f3e5f5; color: #6a1b9a; border-bottom: 2px solid #ab47bc; }
+  .sc-build   { border-color: #78909c; }
+  .sc-build .stack-card-header { background: #eceff1; color: #37474f; border-bottom: 2px solid #78909c; }
+  .sc-db      { border-color: #e57373; }
+  .sc-db .stack-card-header { background: #ffebee; color: #b71c1c; border-bottom: 2px solid #e57373; }
+
+  /* ── Print ── */
+  @media print {
+    .tab-bar { display: none; }
+    .tab-content { display: block !important; page-break-after: always; }
+    .header { padding: 16px; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1><span>&#9875;</span> Anchor <span style="font-weight:300;">&mdash; Project Architecture</span></h1>
+  <div class="subtitle">Unified Terminal Interface for Embedded and Remote Systems</div>
+  <div class="team">
+    <span>Ayush Kadali (1032232229)</span>
+    <span>Krishna Khandelwal (1032232078)</span>
+    <span>Mohammad Khot (1032232680)</span>
+    <span>Yashoda Varma (1032232146)</span>
+  </div>
+</div>
+
+<!-- Tab Bar -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab(0)">Architecture</button>
+  <button class="tab-btn" onclick="switchTab(1)">Login Flow</button>
+  <button class="tab-btn" onclick="switchTab(2)">Class Hierarchy</button>
+  <button class="tab-btn" onclick="switchTab(3)">Password Hashing</button>
+  <button class="tab-btn" onclick="switchTab(4)">Servlet Mapping</button>
+  <button class="tab-btn" onclick="switchTab(5)">Tech Stack</button>
+  <button class="tab-btn" onclick="switchTab(6)">Connection Flow</button>
+  <button class="tab-btn" onclick="switchTab(7)">Multi-User</button>
+  <button class="tab-btn" onclick="switchTab(8)">Network Setup</button>
+</div>
+
+<!-- ═══════════════════ TAB 1: Architecture Overview ═══════════════════ -->
+<div class="tab-content active" id="tab0">
+  <h2>Architecture Overview (3-Layer)</h2>
+
+  <!-- Client Layer -->
+  <div class="layer layer-client">
+    <div class="layer-title" style="color:#1a4e7e;">Client Layer (Browser)</div>
+    <div class="box-grid">
+      <div class="box box-client">login.jsp</div>
+      <div class="box box-client">dashboard.jsp</div>
+      <div class="box box-client">index.jsp</div>
+      <div class="box box-client">register.jsp</div>
+      <div class="box box-client">style.css</div>
+      <div class="box box-client planned">xterm.js [PLANNED]</div>
+    </div>
+    <div class="protocol-bar">
+      <div class="protocol-tag">HTTP POST</div>
+      <div class="protocol-tag">HTTP GET / AJAX</div>
+      <div class="protocol-tag">WebSocket</div>
+    </div>
+  </div>
+
+  <div class="arrow-down-container">
+    <div class="arrow-label">Request / Response</div>
+    <div class="arrow-down"></div>
+  </div>
+
+  <!-- Application Layer -->
+  <div class="layer layer-app">
+    <div class="layer-title" style="color:#2d5e2d;">Application Layer (Tomcat / Jetty)</div>
+
+    <div class="section-label">Servlets &amp; Filters</div>
+    <div class="box-grid">
+      <div class="box box-app">web.xml</div>
+      <div class="box box-app">LoginServlet</div>
+      <div class="box box-app">RegisterServlet</div>
+      <div class="box box-app">LogoutServlet</div>
+      <div class="box box-app">DeviceScannerServlet</div>
+      <div class="box box-app">DbTestServlet</div>
+      <div class="box box-app" style="border-color:#ab47bc; background:#f3e5f5; color:#6a1b9a;">AuthenticationFilter</div>
+      <div class="box box-app">TerminalWebSocket</div>
+    </div>
+
+    <div class="section-label">Models</div>
+    <div class="box-grid">
+      <div class="box box-purple">User.java <span style="font-size:10px;opacity:.7;">(SHA-256)</span></div>
+      <div class="box box-app" style="border-width:3px;">Connection.java [Abstract]</div>
+      <div class="box box-app">SerialConnection</div>
+      <div class="box box-app">SshConnection</div>
+      <div class="box box-app planned">UserDAO [PLANNED]</div>
+      <div class="box box-app planned">ConnectionManager [PLANNED]</div>
+    </div>
+    <div class="inherit-note">
+      SerialConnection <strong>extends</strong> Connection &nbsp;&larr;&nbsp; SshConnection <strong>extends</strong> Connection
+    </div>
+  </div>
+
+  <div class="arrow-down-container">
+    <div class="arrow-label">I/O &amp; Persistence</div>
+    <div class="arrow-down"></div>
+  </div>
+
+  <!-- External Layer -->
+  <div class="layer layer-ext">
+    <div class="layer-title" style="color:#6e2c2c;">External Layer</div>
+    <div class="box-grid">
+      <div class="box box-ext planned">MySQL [PLANNED]</div>
+      <div class="box box-ext">USB Serial Ports <span style="font-size:10px;opacity:.7;">(jSerialComm)</span></div>
+      <div class="box box-ext">SSH Servers <span style="font-size:10px;opacity:.7;">(JSch)</span></div>
+      <div class="box box-ext">Maven / pom.xml</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ TAB 2: Login Flow ═══════════════════ -->
+<div class="tab-content" id="tab1">
+  <h2>Login Flow</h2>
+  <div class="flow">
+    <div class="flow-step flow-gray flow-oval">User opens URL</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step flow-green">Tomcat reads <strong>web.xml</strong></div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step flow-blue"><strong>index.jsp</strong> checks session</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step flow-diamond">Session exists?</div>
+
+    <div class="flow-branch">
+      <div class="flow-branch-arm">
+        <div class="branch-label">NO</div>
+        <div class="flow-arrow"></div>
+        <div class="flow-step flow-blue">Forward to <strong>login.jsp</strong></div>
+      </div>
+      <div class="flow-branch-arm">
+        <div class="branch-label">YES</div>
+        <div class="flow-arrow"></div>
+        <div class="flow-step flow-green">Redirect to <strong>dashboard.jsp</strong></div>
+      </div>
+    </div>
+
+    <div style="height:12px;"></div>
+    <div class="flow-step flow-gray">User submits login form</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step flow-red"><strong>HTTP POST /login</strong></div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step flow-green"><strong>LoginServlet.doPost()</strong></div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step flow-blue">HashMap lookup (in-memory users)</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step flow-purple"><strong>verifyPassword()</strong> &mdash; SHA-256</div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step flow-diamond">Password match?</div>
+
+    <div class="flow-branch">
+      <div class="flow-branch-arm">
+        <div class="branch-label">YES</div>
+        <div class="flow-arrow"></div>
+        <div class="flow-step flow-green">Create HttpSession</div>
+        <div class="flow-arrow"></div>
+        <div class="flow-step flow-green" style="border-width:3px;">&#10003; Redirect to <strong>dashboard.jsp</strong></div>
+      </div>
+      <div class="flow-branch-arm">
+        <div class="branch-label">NO</div>
+        <div class="flow-arrow"></div>
+        <div class="flow-step flow-red">Set error attribute</div>
+        <div class="flow-arrow"></div>
+        <div class="flow-step flow-red" style="border-width:3px;">&#10007; Forward back to <strong>login.jsp</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ TAB 3: Class Hierarchy ═══════════════════ -->
+<div class="tab-content" id="tab2">
+  <h2>OOP Class Hierarchy (UML)</h2>
+
+  <div class="uml-container">
+
+    <!-- Connection (abstract) -->
+    <div class="uml-box uml-green abstract">
+      <div class="uml-header">Connection &laquo;abstract&raquo;</div>
+      <div class="uml-section">
+        # connectionId : String<br>
+        # connected : boolean<br>
+        # connectedAt : long
+      </div>
+      <div class="uml-section">
+        <span class="abstract-method">+ connect() : boolean</span><br>
+        <span class="abstract-method">+ disconnect() : void</span><br>
+        <span class="abstract-method">+ send(byte[]) : boolean</span><br>
+        <span class="abstract-method">+ receive() : byte[]</span><br>
+        <span class="abstract-method">+ getType() : String</span><br>
+        + isConnected() : boolean
+      </div>
+    </div>
+
+    <!-- User -->
+    <div class="uml-box uml-purple">
+      <div class="uml-header">User</div>
+      <div class="uml-section">
+        - username : String<br>
+        - passwordHash : String<br>
+        - salt : String<br>
+        - role : String
+      </div>
+      <div class="uml-section">
+        + verifyPassword(String) : boolean<br>
+        - generateSalt() : String<br>
+        - hashPassword(String, String) : String
+      </div>
+    </div>
+  </div>
+
+  <div class="uml-arrows">
+    &#9650; <strong>extends</strong> &#9650;<br>
+    <span style="font-size:11px;color:#999;">SerialConnection and SshConnection extend Connection</span>
+  </div>
+
+  <div class="uml-container">
+    <!-- SerialConnection -->
+    <div class="uml-box uml-green">
+      <div class="uml-header">SerialConnection</div>
+      <div class="uml-section">
+        - portName : String<br>
+        - baudRate : int<br>
+        - serialPort : SerialPort
+      </div>
+      <div class="uml-section">
+        + connect() : boolean<br>
+        + disconnect() : void<br>
+        + send(byte[]) : boolean<br>
+        + receive() : byte[]<br>
+        + getType() : "SERIAL"
+      </div>
+    </div>
+
+    <!-- SshConnection -->
+    <div class="uml-box uml-green">
+      <div class="uml-header">SshConnection</div>
+      <div class="uml-section">
+        - host : String<br>
+        - port : int<br>
+        - username : String
+      </div>
+      <div class="uml-section">
+        + connect() : boolean<br>
+        + disconnect() : void<br>
+        + send(byte[]) : boolean<br>
+        + receive() : byte[]<br>
+        + getType() : "SSH"
+      </div>
+    </div>
+  </div>
+
+  <div class="uml-legend">
+    <div><span>+</span> public</div>
+    <div><span>#</span> protected</div>
+    <div><span>-</span> private</div>
+    <div><em>italic</em> = abstract method</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ TAB 4: Password Hashing ═══════════════════ -->
+<div class="tab-content" id="tab3">
+  <h2>Password Hashing Flow</h2>
+
+  <div class="flow-label">REGISTRATION</div>
+  <div class="hash-flow-row">
+    <div class="hash-box hash-input">Password<br><code>"admin123"</code></div>
+    <div class="hash-arrow"></div>
+    <div class="hash-box hash-process">+ Salt<br><span style="font-size:11px;">(SecureRandom)</span></div>
+    <div class="hash-arrow"></div>
+    <div class="hash-box hash-algo">SHA-256<br><span style="font-size:11px;">(MessageDigest)</span></div>
+    <div class="hash-arrow"></div>
+    <div class="hash-box hash-output">Base64<br>Encode</div>
+    <div class="hash-arrow"></div>
+    <div class="hash-box hash-stored">Stored:<br><strong>salt + hash</strong></div>
+  </div>
+
+  <div style="height:16px;"></div>
+
+  <div class="flow-label">VERIFICATION (Login)</div>
+  <div class="hash-flow-row">
+    <div class="hash-box hash-input">Enter<br><code>"admin123"</code></div>
+    <div class="hash-arrow"></div>
+    <div class="hash-box hash-stored">+ Stored<br>Salt</div>
+    <div class="hash-arrow"></div>
+    <div class="hash-box hash-algo">SHA-256</div>
+    <div class="hash-arrow"></div>
+    <div class="hash-box hash-output">New Hash</div>
+    <div class="hash-arrow"></div>
+    <div class="hash-box hash-process" style="min-width: 120px;">Compare<br>Hashes</div>
+    <div class="hash-arrow"></div>
+    <div class="hash-box" style="background:#e8f5e9;border-color:#66bb6a;color:#2e7d32;">Match &#10003;</div>
+  </div>
+  <div class="hash-flow-row" style="margin-top:-14px;">
+    <div style="width:100%;text-align:right;padding-right:10px;">
+      <span class="hash-box" style="background:#ffebee;border-color:#e57373;color:#b71c1c;font-size:12px;">No Match &#10007;</span>
+    </div>
+  </div>
+
+  <div class="hash-note">
+    &#128274; Plain-text password is <strong>NEVER</strong> stored &mdash; only the salt and the hashed output are persisted.
+  </div>
+</div>
+
+<!-- ═══════════════════ TAB 5: Servlet Mapping ═══════════════════ -->
+<div class="tab-content" id="tab4">
+  <h2>Request Flow / Servlet Mapping</h2>
+
+  <table class="mapping-table">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>URL Pattern</th>
+        <th>Handler</th>
+        <th>Action</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="method-get">GET</td>
+        <td><code>/</code></td>
+        <td>welcome-file</td>
+        <td>Serve welcome file</td>
+        <td><code>index.jsp</code></td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td><code>/login</code></td>
+        <td>LoginServlet.doGet()</td>
+        <td>Forward</td>
+        <td><code>login.jsp</code></td>
+      </tr>
+      <tr>
+        <td class="method-post">POST</td>
+        <td><code>/login</code></td>
+        <td>LoginServlet.doPost()</td>
+        <td>Authenticate user</td>
+        <td>Redirect <code>dashboard.jsp</code></td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td><code>/register</code></td>
+        <td>RegisterServlet.doGet()</td>
+        <td>Forward</td>
+        <td><code>register.jsp</code></td>
+      </tr>
+      <tr>
+        <td class="method-post">POST</td>
+        <td><code>/register</code></td>
+        <td>RegisterServlet.doPost()</td>
+        <td>Create user</td>
+        <td>Redirect <code>login.jsp</code></td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td><code>/logout</code></td>
+        <td>LogoutServlet</td>
+        <td>Invalidate session</td>
+        <td>Redirect <code>login.jsp</code></td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td><code>/api/devices</code></td>
+        <td>DeviceScannerServlet</td>
+        <td>Scan serial ports</td>
+        <td>JSON response</td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td><code>/dbtest</code></td>
+        <td>DbTestServlet</td>
+        <td>JDBC connection test</td>
+        <td>HTML test page</td>
+      </tr>
+      <tr>
+        <td class="method-ws">WS</td>
+        <td><code>/terminal</code></td>
+        <td>TerminalWebSocket</td>
+        <td>WebSocket upgrade</td>
+        <td>Echo server</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="filter-note">
+    &#9888; <strong>AuthenticationFilter</strong> intercepts <strong>ALL</strong> requests matching pattern <code>/*</code> &mdash;
+    checks for valid HttpSession before forwarding to servlets. Unprotected paths (login, register, static) are whitelisted.
+  </div>
+</div>
+
+<!-- ═══════════════════ TAB 6: Tech Stack ═══════════════════ -->
+<div class="tab-content" id="tab5">
+  <h2>Technology Stack</h2>
+
+  <div class="stack-grid">
+    <!-- Client -->
+    <div class="stack-card sc-client">
+      <div class="stack-card-header">Client</div>
+      <div class="stack-card-body">
+        <div class="stack-item"><span>HTML / CSS</span><span class="pkg">-</span></div>
+        <div class="stack-item"><span>JSP 2.3</span><span class="pkg">javax.servlet.jsp</span></div>
+        <div class="stack-item"><span>JavaScript (ES6)</span><span class="pkg">-</span></div>
+        <div class="stack-item planned" style="border-radius:4px;padding:2px 4px;border:1px dashed #e6b800;background:#fff8e1;">
+          <span>xterm.js [PLANNED]</span><span class="pkg">npm: xterm</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Server -->
+    <div class="stack-card sc-server">
+      <div class="stack-card-header">Server</div>
+      <div class="stack-card-body">
+        <div class="stack-item"><span>Java 11+</span><span class="pkg">java.base</span></div>
+        <div class="stack-item"><span>Servlet API 4.0</span><span class="pkg">javax.servlet</span></div>
+        <div class="stack-item"><span>WebSocket API 1.1</span><span class="pkg">javax.websocket</span></div>
+        <div class="stack-item"><span>Tomcat / Jetty</span><span class="pkg">embedded server</span></div>
+      </div>
+    </div>
+
+    <!-- Libraries -->
+    <div class="stack-card sc-lib">
+      <div class="stack-card-header">Libraries</div>
+      <div class="stack-card-body">
+        <div class="stack-item"><span>jSerialComm 2.10</span><span class="pkg">com.fazecast.jSerialComm</span></div>
+        <div class="stack-item"><span>JSch 0.1.55</span><span class="pkg">com.jcraft.jsch</span></div>
+        <div class="stack-item"><span>MySQL Connector 8.0</span><span class="pkg">com.mysql.cj.jdbc</span></div>
+        <div class="stack-item"><span>JSTL 1.2</span><span class="pkg">javax.servlet.jsp.jstl</span></div>
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div class="stack-card sc-sec">
+      <div class="stack-card-header">Security</div>
+      <div class="stack-card-body">
+        <div class="stack-item"><span>MessageDigest (SHA-256)</span><span class="pkg">java.security</span></div>
+        <div class="stack-item"><span>SecureRandom</span><span class="pkg">java.security</span></div>
+        <div class="stack-item"><span>HttpSession</span><span class="pkg">javax.servlet.http</span></div>
+        <div class="stack-item"><span>Servlet Filter</span><span class="pkg">javax.servlet</span></div>
+      </div>
+    </div>
+
+    <!-- Build -->
+    <div class="stack-card sc-build">
+      <div class="stack-card-header">Build &amp; Packaging</div>
+      <div class="stack-card-body">
+        <div class="stack-item"><span>Apache Maven</span><span class="pkg">mvn</span></div>
+        <div class="stack-item"><span>WAR Packaging</span><span class="pkg">maven-war-plugin</span></div>
+      </div>
+    </div>
+
+    <!-- Database -->
+    <div class="stack-card sc-db">
+      <div class="stack-card-header">Database</div>
+      <div class="stack-card-body">
+        <div class="stack-item planned" style="border-radius:4px;padding:2px 4px;border:1px dashed #e6b800;background:#fff8e1;">
+          <span>MySQL 8.0 [PLANNED]</span><span class="pkg">com.mysql.cj</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB 7: Connection Flow ══════════ -->
+<div class="tab-content" id="tab6">
+  <div class="diagram-container" style="padding:24px;">
+    <h2 style="text-align:center;margin-bottom:20px;">Serial/SSH Connection Flow</h2>
+    <p style="text-align:center;color:#666;margin-bottom:24px;">How a browser keystroke reaches a physical device and back</p>
+
+    <div style="max-width:700px;margin:0 auto;">
+      <!-- Step 1 -->
+      <div style="background:#dae8fc;border:2px solid #6c8ebf;padding:14px;border-radius:6px;text-align:center;">
+        <b>1. User types "hello" in browser</b><br>
+        <small>dashboard.jsp JavaScript: ws.send("hello")</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <!-- Step 2 -->
+      <div style="background:#d5e8d4;border:2px solid #82b366;padding:14px;border-radius:6px;text-align:center;">
+        <b>2. TerminalWebSocket.onMessage("hello")</b><br>
+        <small>@OnMessage fires in Java. Parses command.</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <!-- Step 3 -->
+      <div style="background:#d5e8d4;border:2px solid #82b366;padding:14px;border-radius:6px;text-align:center;">
+        <b>3. ConnectionManager.send(sessionId, bytes)</b><br>
+        <small>Singleton looks up which Connection belongs to this session.<br>Checks isOwner() - only owner can send.</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <!-- Step 4 - Branch -->
+      <div style="display:flex;gap:20px;">
+        <div style="flex:1;background:#e6ffe6;border:2px solid #82b366;padding:14px;border-radius:6px;text-align:center;">
+          <b>4a. SerialConnection.send()</b><br>
+          <small>serialPort.writeBytes(data, len)<br>jSerialComm writes to USB port</small>
+        </div>
+        <div style="flex:1;background:#e6ffe6;border:2px solid #82b366;padding:14px;border-radius:6px;text-align:center;">
+          <b>4b. SshConnection.send()</b><br>
+          <small>outputStream.write(data)<br>outputStream.flush()<br>JSch sends over TCP</small>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <!-- Step 5 -->
+      <div style="background:#f8cecc;border:2px solid #b85450;padding:14px;border-radius:6px;text-align:center;">
+        <b>5. Physical Device / Remote Server</b><br>
+        <small>Arduino processes command, or Linux shell executes it.<br>Sends response back.</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8593;</div>
+
+      <div style="text-align:center;background:#fff3cd;border:2px solid #ffc107;padding:14px;border-radius:6px;margin-top:4px;">
+        <b>6. Reader Thread (background, every 50ms)</b><br>
+        <small>connection.receive() polls for data.<br>
+        If data available: session.getBasicRemote().sendText(data)<br>
+        Also: ConnectionManager.broadcastToViewers(data)</small>
+      </div>
+      <div style="text-align:center;font-size:24px;color:#333;">&#8595;</div>
+
+      <div style="background:#dae8fc;border:2px solid #6c8ebf;padding:14px;border-radius:6px;text-align:center;">
+        <b>7. Browser receives data</b><br>
+        <small>ws.onmessage fires in JavaScript.<br>appendTerminal(event.data) displays it.</small>
+      </div>
+    </div>
+
+    <div style="margin-top:30px;background:#f5f5f5;padding:14px;border-radius:6px;">
+      <b>Key Java Concepts in this flow:</b><br>
+      <small>
+        - <b>Polymorphism:</b> ConnectionManager calls send()/receive() without knowing if it's Serial or SSH<br>
+        - <b>Daemon Thread:</b> Reader thread runs in background, auto-stops when server stops<br>
+        - <b>volatile:</b> reading flag visible across threads<br>
+        - <b>byte[]:</b> Raw binary data for hardware communication<br>
+        - <b>WebSocket:</b> Bidirectional persistent connection (unlike HTTP request-response)
+      </small>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB 8: Multi-User ══════════ -->
+<div class="tab-content" id="tab7">
+  <div class="diagram-container" style="padding:24px;">
+    <h2 style="text-align:center;margin-bottom:20px;">Multi-User Access (Owner/Viewer)</h2>
+    <p style="text-align:center;color:#666;margin-bottom:24px;">What happens when multiple people connect to the same device</p>
+
+    <div style="max-width:750px;margin:0 auto;">
+
+      <!-- Scenario 1 -->
+      <div style="background:#d5e8d4;border:2px solid #82b366;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 1: Student A connects to COM3</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          <code>connect serial COM3 9600</code><br><br>
+          ConnectionManager.connectSerial():<br>
+          &nbsp;&nbsp;1. Check portToConnection map - is COM3 in use? <b>NO</b><br>
+          &nbsp;&nbsp;2. Create new SerialConnection("COM3", 9600)<br>
+          &nbsp;&nbsp;3. serialConnection.connect() - opens port<br>
+          &nbsp;&nbsp;4. Store in connections map<br>
+          &nbsp;&nbsp;5. Set Student A as <span style="background:#28a745;color:#fff;padding:2px 8px;border-radius:3px;">OWNER</span><br>
+          &nbsp;&nbsp;6. Start reader thread for this connection
+        </div>
+      </div>
+
+      <!-- Scenario 2 -->
+      <div style="background:#fff3cd;border:2px solid #ffc107;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 2: Student B connects to COM3 (same device!)</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          <code>connect serial COM3 9600</code><br><br>
+          ConnectionManager.connectSerial():<br>
+          &nbsp;&nbsp;1. Check portToConnection map - is COM3 in use? <b>YES</b><br>
+          &nbsp;&nbsp;2. Port owned by Student A<br>
+          &nbsp;&nbsp;3. Add Student B to connectionViewers list<br>
+          &nbsp;&nbsp;4. Set Student B as <span style="background:#ffc107;color:#000;padding:2px 8px;border-radius:3px;">VIEWER</span><br>
+          &nbsp;&nbsp;5. Student B sees output but <b>cannot type commands</b><br>
+          &nbsp;&nbsp;6. Message: "Device in use by Student A. Joined as viewer."
+        </div>
+      </div>
+
+      <!-- Data flow -->
+      <div style="background:#dae8fc;border:2px solid #6c8ebf;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 3: Device sends output</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          Reader thread calls connection.receive()<br><br>
+          Data goes to:<br>
+          &nbsp;&nbsp;&#8594; Student A (owner) via session.getBasicRemote().sendText()<br>
+          &nbsp;&nbsp;&#8594; Student B (viewer) via broadcastToViewers()<br>
+          &nbsp;&nbsp;&#8594; Student C (viewer) via broadcastToViewers()<br><br>
+          <b>Everyone sees the same output simultaneously.</b>
+        </div>
+      </div>
+
+      <!-- Command flow -->
+      <div style="background:#f5f5f5;border:2px solid #ccc;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 4: Who can type?</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          Student A types "ls" &#8594; ConnectionManager.send() &#8594; checks isOwner() &#8594; <b>YES</b> &#8594; sent to device<br><br>
+          Student B types "ls" &#8594; ConnectionManager.send() &#8594; checks isOwner() &#8594; <b>NO</b> &#8594; blocked<br>
+          Message: "You are a VIEWER. Only the owner can send commands."
+        </div>
+      </div>
+
+      <!-- Promotion -->
+      <div style="background:#f8cecc;border:2px solid #b85450;padding:16px;border-radius:6px;margin-bottom:16px;">
+        <b>Step 5: Student A disconnects</b>
+        <div style="margin-top:8px;padding:10px;background:#fff;border-radius:4px;">
+          ConnectionManager.disconnect(Student A session):<br><br>
+          &nbsp;&nbsp;1. Student A was OWNER<br>
+          &nbsp;&nbsp;2. Check connectionViewers list - Student B is waiting<br>
+          &nbsp;&nbsp;3. <b>Promote Student B to OWNER</b><br>
+          &nbsp;&nbsp;4. Send message to B: "You are now the OWNER. You can type commands."<br>
+          &nbsp;&nbsp;5. Student B can now control the device<br><br>
+          If no viewers: close the SerialConnection, free the port.
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;background:#f5f5f5;padding:14px;border-radius:6px;">
+      <b>Java Concepts:</b><br>
+      <small>
+        - <b>synchronized:</b> connectSerial() is synchronized to prevent race condition when two people connect at the same millisecond<br>
+        - <b>ConcurrentHashMap:</b> Thread-safe map for multiple WebSocket threads accessing simultaneously<br>
+        - <b>Iterator.remove():</b> Safely removes dead viewer sessions while iterating<br>
+        - <b>instanceof:</b> Check if connection is SerialConnection for port cleanup<br>
+        - <b>Observer pattern:</b> broadcastToViewers() pushes data to all subscribers
+      </small>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB 9: Network Setup ══════════ -->
+<div class="tab-content" id="tab8">
+  <div class="diagram-container" style="padding:24px;">
+    <h2 style="text-align:center;margin-bottom:20px;">Network Architecture</h2>
+    <p style="text-align:center;color:#666;margin-bottom:24px;">Multiple laptops as servers, accessed from any browser on the network</p>
+
+    <div style="max-width:800px;margin:0 auto;">
+
+      <!-- Network diagram -->
+      <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:24px;">
+        <!-- Server 1 -->
+        <div style="background:#d5e8d4;border:2px solid #82b366;padding:16px;border-radius:8px;width:220px;">
+          <div style="text-align:center;font-weight:bold;margin-bottom:8px;">Laptop A (Server)</div>
+          <div style="background:#fff;padding:8px;border-radius:4px;font-size:0.85em;">
+            Anchor Server running<br>
+            IP: 192.168.1.10:8080<br><br>
+            Devices connected:<br>
+            - Arduino Mega (COM3)<br>
+            - Sensor Board (COM5)
+          </div>
+        </div>
+        <!-- Server 2 -->
+        <div style="background:#d5e8d4;border:2px solid #82b366;padding:16px;border-radius:8px;width:220px;">
+          <div style="text-align:center;font-weight:bold;margin-bottom:8px;">Laptop B (Server)</div>
+          <div style="background:#fff;padding:8px;border-radius:4px;font-size:0.85em;">
+            Anchor Server running<br>
+            IP: 192.168.1.20:8080<br><br>
+            Devices connected:<br>
+            - Cisco Router (COM1)<br>
+            - Raspberry Pi (USB)
+          </div>
+        </div>
+        <!-- Client -->
+        <div style="background:#dae8fc;border:2px solid #6c8ebf;padding:16px;border-radius:8px;width:220px;">
+          <div style="text-align:center;font-weight:bold;margin-bottom:8px;">Laptop C (Client)</div>
+          <div style="background:#fff;padding:8px;border-radius:4px;font-size:0.85em;">
+            No Anchor server needed<br>
+            Just a browser<br><br>
+            Can access:<br>
+            - <a href="#" style="color:#007bff;">192.168.1.10:8080</a> (A's devices)<br>
+            - <a href="#" style="color:#007bff;">192.168.1.20:8080</a> (B's devices)
+          </div>
+        </div>
+      </div>
+
+      <!-- Network line -->
+      <div style="background:#fff;border:2px solid #333;padding:10px;text-align:center;border-radius:20px;margin:0 auto;max-width:500px;">
+        WiFi Network / LAN (same subnet)
+      </div>
+
+      <!-- How it works -->
+      <div style="margin-top:24px;">
+        <h3 style="margin-bottom:12px;">How It Works</h3>
+
+        <div style="background:#fff;border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:10px;">
+          <b>1. Each laptop with hardware runs its own Anchor server</b><br>
+          <code style="background:#f5f5f5;padding:2px 6px;">cd anchor && mvn jetty:run</code><br>
+          <small>Jetty binds to 0.0.0.0 (all network interfaces) - not just localhost</small>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:10px;">
+          <b>2. Server detects its own hardware</b><br>
+          <small>DeviceScannerServlet calls SerialPort.getCommPorts() to list local USB ports.<br>
+          Only ports physically connected to THIS laptop are shown.</small>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:10px;">
+          <b>3. Client connects from any browser</b><br>
+          <small>Student opens http://192.168.1.10:8080/anchor from their laptop.<br>
+          Logs in, scans devices, connects to Arduino on Laptop A.<br>
+          All communication goes through WebSocket over the network.</small>
+        </div>
+
+        <div style="background:#fff;border:1px solid #ddd;padding:14px;border-radius:6px;margin-bottom:10px;">
+          <b>4. Multiple clients, multiple servers</b><br>
+          <small>Student 1 connects to Laptop A's Arduino.<br>
+          Student 2 connects to Laptop B's Router.<br>
+          Student 3 connects to Laptop A's Arduino as VIEWER.<br>
+          Professor monitors all from their own browser.</small>
+        </div>
+      </div>
+
+      <!-- Config -->
+      <div style="margin-top:20px;background:#f5f5f5;padding:14px;border-radius:6px;">
+        <b>Configuration (pom.xml):</b><br>
+        <code style="font-size:0.9em;">
+          &lt;httpConnector&gt;<br>
+          &nbsp;&nbsp;&lt;host&gt;0.0.0.0&lt;/host&gt; &lt;!-- listen on all interfaces --&gt;<br>
+          &nbsp;&nbsp;&lt;port&gt;8080&lt;/port&gt;<br>
+          &lt;/httpConnector&gt;
+        </code><br><br>
+        <small>
+          0.0.0.0 means "accept connections from any network interface".<br>
+          Default localhost (127.0.0.1) only accepts connections from the same machine.<br>
+          This one change makes the entire application network-accessible.
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(i) {
+  document.querySelectorAll('.tab-btn').forEach(function(b, idx) {
+    b.classList.toggle('active', idx === i);
+  });
+  document.querySelectorAll('.tab-content').forEach(function(c, idx) {
+    c.classList.toggle('active', idx === i);
+  });
+}
+</script>
+</body>
+</html>
