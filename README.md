@@ -65,26 +65,6 @@ Browser (any laptop)
 4. User A becomes viewer, User B can now type commands
 5. Both still see all output
 
-## Current Status
-
-| Feature | Status |
-|---------|--------|
-| Login / Registration | Working |
-| Authentication Filter | Working |
-| Device Scanning | Working |
-| WebSocket Terminal | Working |
-| Serial Connection | Working |
-| SSH Connection | Working |
-| Multi-user (Owner / Viewer) | Working |
-| Ownership Transfer | Working |
-| Network Access | Working |
-| JDBC Test | Working (driver loads) |
-| Active Connections API | Working |
-| Server Status Page | Working |
-| MySQL Persistent Storage | Planned |
-| xterm.js Terminal Emulator | Planned |
-| HTTPS | Planned |
-
 ## Team
 
 | Name | Contribution |
