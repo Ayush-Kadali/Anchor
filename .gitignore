@@ -3,10 +3,20 @@ anchor/target/
 
 # Team prep files
 team/
+team-zips/
 explorations/
 explanations/
+submission/
+github-upload/
+documentation/
 ANCHOR_COMPLETE_REFERENCE.md
 Anchor_Architecture.drawio
+DEMO_GUIDE.md
+SYNOPSIS.md
+Anchor_Synopsis.html
+Anchor_Synopsis.jpeg
+Anchor_Synopsis.pdf
+Anchor_Synopsis.png
 
 # IDE
 .idea/

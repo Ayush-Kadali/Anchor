@@ -58,11 +58,22 @@
             Server: <b><%= request.getLocalAddr() %>:<%= request.getLocalPort() %></b>
         </div>
         <div>
-            <a href="status" target="_blank">Server Status</a> &nbsp;
+            <a href="logs.jsp" target="_blank">Logs</a> &nbsp;
+            <% if ("ADMIN".equals(role)) { %>
+                <a href="admin.jsp" target="_blank" style="color:#e74c3c;font-weight:bold;">Admin Panel</a> &nbsp;
+            <% } %>
+            <a href="status" target="_blank">Status</a> &nbsp;
             <a href="dbtest" target="_blank">Test DB</a> &nbsp;
             <a href="logout" style="color:red;">Logout</a>
         </div>
     </div>
+
+    <% if ("admin_only".equals(request.getParameter("error"))) { %>
+        <div style="background:#f8d7da; border:1px solid #f5c6cb; color:#721c24;
+                     padding:10px; margin-bottom:10px;">
+            Access denied: admin role required for that page.
+        </div>
+    <% } %>
 
     <div class="main">
 

@@ -1,11 +1,13 @@
 package com.anchor.servlets;
 
 import com.anchor.models.Connection;
+import com.anchor.models.User;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Map;
@@ -32,6 +34,10 @@ public class StatusServlet extends HttpServlet {
 
         ConnectionManager mgr = ConnectionManager.getInstance();
 
+        // Enhancement 4: only admins see private users' connections
+        HttpSession httpSession = request.getSession(false);
+        boolean isAdmin = httpSession != null && "ADMIN".equals(httpSession.getAttribute("role"));
+
         out.println("<!DOCTYPE html><html><head><title>Anchor - Server Status</title>");
         out.println("<meta http-equiv='refresh' content='5'>"); // auto-refresh every 5 sec
         out.println("</head><body style='font-family:Arial;margin:20px;'>");
@@ -57,6 +63,14 @@ public class StatusServlet extends HttpServlet {
                 String owner = mgr.getOwnerName(connId);
                 String desc = mgr.getDescription(connId);
                 java.util.List<String> viewers = mgr.getViewerNames(connId);
+
+                // Enhancement 4: skip connections from private users unless admin
+                if (!isAdmin) {
+                    User ownerUser = LoginServlet.getUser(owner);
+                    if (ownerUser != null && !ownerUser.isPublic()) {
+                        continue;
+                    }
+                }
 
                 out.println("<tr>");
                 out.println("<td>" + connId.substring(0, 8) + "...</td>");

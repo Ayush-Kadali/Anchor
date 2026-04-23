@@ -50,6 +50,16 @@ public class LoginServlet extends HttpServlet {
         users.put(user.getUsername(), user);
     }
 
+    // used by ConnectionManager privacy filter and AdminServlet
+    public static User getUser(String username) {
+        return users.get(username);
+    }
+
+    // used by AdminServlet to list all users
+    public static Map<String, User> getAllUsers() {
+        return users;
+    }
+
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {

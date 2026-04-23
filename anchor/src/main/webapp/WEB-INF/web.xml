@@ -98,6 +98,26 @@
         <url-pattern>/status</url-pattern>
     </servlet-mapping>
 
+    <!-- Admin Actions: kick/block/privacy (Enhancement 3+4) -->
+    <servlet>
+        <servlet-name>AdminServlet</servlet-name>
+        <servlet-class>com.anchor.servlets.AdminServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>AdminServlet</servlet-name>
+        <url-pattern>/admin/action</url-pattern>
+    </servlet-mapping>
+
+    <!-- Log Download: PDF generation with filters (Enhancement 2) -->
+    <servlet>
+        <servlet-name>LogDownloadServlet</servlet-name>
+        <servlet-class>com.anchor.servlets.LogDownloadServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>LogDownloadServlet</servlet-name>
+        <url-pattern>/api/logs/download</url-pattern>
+    </servlet-mapping>
+
     <!-- NOTE: TerminalWebSocket uses @ServerEndpoint annotation
          so it does NOT need to be configured here.
          Tomcat/Jetty detects it automatically. -->

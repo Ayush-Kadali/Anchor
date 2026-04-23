@@ -4,6 +4,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
@@ -27,7 +28,11 @@ public class ActiveConnectionsServlet extends HttpServlet {
 
         PrintWriter out = response.getWriter();
         ConnectionManager mgr = ConnectionManager.getInstance();
-        List<Map<String, String>> active = mgr.getActiveConnectionsList();
+
+        // Enhancement 4: pass requester role so private users are hidden from non-admins
+        HttpSession httpSession = request.getSession(false);
+        String requesterRole = (httpSession != null) ? (String) httpSession.getAttribute("role") : null;
+        List<Map<String, String>> active = mgr.getActiveConnectionsList(requesterRole);
 
         StringBuilder json = new StringBuilder();
         json.append("{\"connections\":[");

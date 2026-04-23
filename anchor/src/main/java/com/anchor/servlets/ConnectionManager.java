@@ -1,6 +1,7 @@
 package com.anchor.servlets;
 
 import com.anchor.models.Connection;
+import com.anchor.models.LogEntry;
 import com.anchor.models.SerialConnection;
 import com.anchor.models.SshConnection;
 
@@ -63,6 +64,14 @@ public class ConnectionManager {
     // owner WebSocket session object (needed to send data)
     private Map<String, Session> ownerSessions = new ConcurrentHashMap<>();
 
+    // per-connection log storage: connectionId -> list of log entries
+    // kept after connection closes so users can still download historical logs
+    private Map<String, List<LogEntry>> connectionLogs = new ConcurrentHashMap<>();
+
+    // per-device block list: deviceKey -> set of blocked usernames
+    // deviceKey format: "SERIAL:COM3" or "SSH:user@host:port"
+    private Map<String, Set<String>> deviceBlockList = new ConcurrentHashMap<>();
+
     private ConnectionManager() {
         System.out.println("[Anchor] ConnectionManager initialized");
     }
@@ -103,6 +112,7 @@ public class ConnectionManager {
             sessionUsername.put(wsSession.getId(), username);
             portToConnection.put(port, connId);
             connectionDescription.put(connId, port + " @ " + baudRate + " baud");
+            connectionLogs.putIfAbsent(connId, Collections.synchronizedList(new ArrayList<>()));
 
             // start reader thread (managed by ConnectionManager, not WebSocket)
             startReaderThread(connId);
@@ -141,6 +151,7 @@ public class ConnectionManager {
             connectionUser.put(connId, username);
             sessionUsername.put(wsSession.getId(), username);
             connectionDescription.put(connId, sshKey);
+            connectionLogs.putIfAbsent(connId, Collections.synchronizedList(new ArrayList<>()));
 
             startReaderThread(connId);
 
@@ -156,6 +167,13 @@ public class ConnectionManager {
      * If there's an owner, become viewer.
      */
     private String joinConnection(String connId, Session wsSession, String username) {
+        // block check: user may have been blocked from this device
+        String deviceKey = getDeviceKey(connId);
+        if (deviceKey != null && isBlocked(deviceKey, username)) {
+            System.out.println("[Anchor] Blocked user " + username + " tried to join " + deviceKey);
+            return "BLOCKED:" + deviceKey;
+        }
+
         sessionToConnection.put(wsSession.getId(), connId);
         sessionUsername.put(wsSession.getId(), username);
 
@@ -198,6 +216,9 @@ public class ConnectionManager {
                     byte[] data = conn.receive();
                     if (data.length > 0) {
                         String text = new String(data);
+
+                        // log the output for audit trail
+                        logOutput(connId, text);
 
                         // send to owner (if connected)
                         Session owner = ownerSessions.get(connId);
@@ -490,28 +511,273 @@ public class ConnectionManager {
         connectionViewers.remove(connId);
         connectionUser.remove(connId);
         connectionDescription.remove(connId);
+        // NOTE: intentionally NOT removing connectionLogs[connId]
+        // so historical logs remain downloadable after connection closes
         System.out.println("[Anchor] Connection closed: " + connId);
     }
 
     /*
      * Get list of active connections for display.
      * Used by dashboard to show what's available to join.
+     * Filters out connections from private users unless requester is admin.
      */
     public List<Map<String, String>> getActiveConnectionsList() {
+        return getActiveConnectionsList(null);
+    }
+
+    public List<Map<String, String>> getActiveConnectionsList(String requesterRole) {
+        boolean isAdmin = "ADMIN".equals(requesterRole);
         List<Map<String, String>> list = new ArrayList<>();
         for (Map.Entry<String, Connection> entry : connections.entrySet()) {
             String connId = entry.getKey();
             Connection conn = entry.getValue();
             if (conn.isConnected()) {
+                String ownerName = connectionUser.getOrDefault(connId, "none");
+
+                // privacy filter: skip connections owned by private users
+                // unless the requester is an admin
+                if (!isAdmin) {
+                    com.anchor.models.User ownerUser = LoginServlet.getUser(ownerName);
+                    if (ownerUser != null && !ownerUser.isPublic()) {
+                        continue;  // skip private user's connection
+                    }
+                }
+
                 Map<String, String> info = new HashMap<>();
                 info.put("id", connId);
                 info.put("type", conn.getType());
                 info.put("description", connectionDescription.getOrDefault(connId, "unknown"));
-                info.put("owner", connectionUser.getOrDefault(connId, "none"));
+                info.put("owner", ownerName);
                 list.add(info);
             }
         }
         return list;
+    }
+
+    // =====================================================================
+    // LOGGING METHODS (Enhancement 1)
+    // =====================================================================
+
+    /*
+     * Log an input command typed by the owner.
+     * Called from TerminalWebSocket.handleData().
+     */
+    public void logInput(String connId, String username, String message) {
+        Connection conn = connections.get(connId);
+        if (conn == null) return;
+        List<LogEntry> logs = connectionLogs.get(connId);
+        if (logs == null) return;
+
+        String deviceName = "unknown";
+        String portOrHost = "unknown";
+        if (conn instanceof SerialConnection) {
+            SerialConnection sc = (SerialConnection) conn;
+            deviceName = sc.getPortName();
+            portOrHost = sc.getPortName();
+        } else if (conn instanceof SshConnection) {
+            SshConnection ssh = (SshConnection) conn;
+            deviceName = ssh.getHost();
+            portOrHost = ssh.getUsername() + "@" + ssh.getHost() + ":" + ssh.getPort();
+        }
+
+        logs.add(new LogEntry(
+            System.currentTimeMillis(),
+            username,
+            "INPUT",
+            message,
+            conn.getType(),
+            deviceName,
+            portOrHost
+        ));
+    }
+
+    /*
+     * Log an output chunk received from the device.
+     * Called from the reader thread.
+     */
+    public void logOutput(String connId, String data) {
+        Connection conn = connections.get(connId);
+        if (conn == null) return;
+        List<LogEntry> logs = connectionLogs.get(connId);
+        if (logs == null) return;
+
+        String deviceName = "unknown";
+        String portOrHost = "unknown";
+        if (conn instanceof SerialConnection) {
+            SerialConnection sc = (SerialConnection) conn;
+            deviceName = sc.getPortName();
+            portOrHost = sc.getPortName();
+        } else if (conn instanceof SshConnection) {
+            SshConnection ssh = (SshConnection) conn;
+            deviceName = ssh.getHost();
+            portOrHost = ssh.getUsername() + "@" + ssh.getHost() + ":" + ssh.getPort();
+        }
+
+        logs.add(new LogEntry(
+            System.currentTimeMillis(),
+            null,
+            "OUTPUT",
+            data,
+            conn.getType(),
+            deviceName,
+            portOrHost
+        ));
+    }
+
+    /*
+     * Get all logs across all connections.
+     * Sorted by timestamp ascending.
+     * Used by LogDownloadServlet for PDF generation.
+     */
+    public List<LogEntry> getAllLogs() {
+        List<LogEntry> all = new ArrayList<>();
+        for (List<LogEntry> connLogs : connectionLogs.values()) {
+            synchronized (connLogs) {
+                all.addAll(connLogs);
+            }
+        }
+        all.sort((a, b) -> Long.compare(a.getTimestamp(), b.getTimestamp()));
+        return all;
+    }
+
+    // =====================================================================
+    // BLOCK LIST METHODS (Enhancement 3)
+    // =====================================================================
+
+    /*
+     * Build a device key from connection metadata.
+     * Used to identify a specific device for blocking purposes.
+     */
+    public String getDeviceKey(String connId) {
+        Connection conn = connections.get(connId);
+        if (conn == null) return null;
+        if (conn instanceof SerialConnection) {
+            return "SERIAL:" + ((SerialConnection) conn).getPortName();
+        } else if (conn instanceof SshConnection) {
+            SshConnection ssh = (SshConnection) conn;
+            return "SSH:" + ssh.getUsername() + "@" + ssh.getHost() + ":" + ssh.getPort();
+        }
+        return null;
+    }
+
+    /*
+     * Block a user from a specific device.
+     * They cannot rejoin this device unless unblocked.
+     * Per-device - blocking on COM3 doesn't block SSH to the same user.
+     */
+    public void blockUser(String connId, String username) {
+        String deviceKey = getDeviceKey(connId);
+        if (deviceKey == null) return;
+        deviceBlockList.computeIfAbsent(deviceKey,
+            k -> Collections.synchronizedSet(new HashSet<>())).add(username);
+        System.out.println("[Anchor] Blocked " + username + " from " + deviceKey);
+    }
+
+    /*
+     * Unblock a user from a specific device.
+     */
+    public void unblockUser(String deviceKey, String username) {
+        Set<String> blocked = deviceBlockList.get(deviceKey);
+        if (blocked != null) {
+            blocked.remove(username);
+            System.out.println("[Anchor] Unblocked " + username + " from " + deviceKey);
+        }
+    }
+
+    /*
+     * Check if a user is blocked from a specific device.
+     */
+    public boolean isBlocked(String deviceKey, String username) {
+        Set<String> blocked = deviceBlockList.get(deviceKey);
+        return blocked != null && blocked.contains(username);
+    }
+
+    /*
+     * Get the full block list - for admin dashboard display.
+     * Returns map of deviceKey -> set of blocked usernames.
+     */
+    public Map<String, Set<String>> getAllBlocks() {
+        return deviceBlockList;
+    }
+
+    /*
+     * Admin-initiated ownership transfer.
+     *
+     * Unlike transferToUser which requires the current owner to initiate,
+     * this is called from the admin dashboard and finds the current owner
+     * internally. The current owner is demoted to viewer; the target
+     * becomes the new owner.
+     *
+     * Returns true on success, false if no current owner or target not found in viewers.
+     */
+    public synchronized boolean adminTransferOwnership(String connId, String targetUsername) {
+        Session currentOwnerSession = ownerSessions.get(connId);
+        if (currentOwnerSession == null) {
+            // no owner exists - just promote the named viewer directly
+            List<Session> viewers = connectionViewers.get(connId);
+            if (viewers == null) return false;
+
+            synchronized (viewers) {
+                Iterator<Session> it = viewers.iterator();
+                while (it.hasNext()) {
+                    Session v = it.next();
+                    if (targetUsername.equals(sessionUsername.get(v.getId())) && v.isOpen()) {
+                        it.remove();
+                        connectionOwner.put(connId, v.getId());
+                        ownerSessions.put(connId, v);
+                        connectionUser.put(connId, targetUsername);
+                        sessionToConnection.put(v.getId(), connId);
+                        try {
+                            v.getBasicRemote().sendText(
+                                "\r\n[Administrator made you the OWNER. You can type commands.]\r\n");
+                        } catch (IOException e) { /* ignore */ }
+                        System.out.println("[Anchor] Admin made " + targetUsername + " owner of " + connId);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // there is a current owner - delegate to existing transferToUser
+        boolean transferred = transferToUser(connId, currentOwnerSession, targetUsername);
+        if (transferred) {
+            try {
+                currentOwnerSession.getBasicRemote().sendText(
+                    "\r\n[Administrator transferred ownership. You are now a VIEWER.]\r\n");
+            } catch (IOException e) { /* ignore */ }
+        }
+        return transferred;
+    }
+
+    /*
+     * Kick a viewer from a connection (without blocking them).
+     * Only to be called by admin/owner action handlers.
+     */
+    public synchronized boolean kickViewer(String connId, String targetUsername) {
+        List<Session> viewers = connectionViewers.get(connId);
+        if (viewers == null) return false;
+
+        synchronized (viewers) {
+            Iterator<Session> it = viewers.iterator();
+            while (it.hasNext()) {
+                Session v = it.next();
+                String vName = sessionUsername.get(v.getId());
+                if (targetUsername.equals(vName)) {
+                    if (v.isOpen()) {
+                        try {
+                            v.getBasicRemote().sendText(
+                                "\r\n[You have been kicked by the administrator.]\r\n");
+                        } catch (IOException e) { /* ignore */ }
+                    }
+                    it.remove();
+                    sessionToConnection.remove(v.getId());
+                    System.out.println("[Anchor] Kicked " + targetUsername + " from " + connId);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public String getConnectionForSession(String wsSessionId) {

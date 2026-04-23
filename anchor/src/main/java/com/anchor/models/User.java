@@ -20,6 +20,7 @@ public class User {
     private String salt;
     private String email;
     private String role; // ADMIN or USER
+    private boolean isPublic = true;  // Enhancement 4: private users hidden from normal users
 
     public User() {}
 
@@ -46,6 +47,9 @@ public class User {
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
+    public boolean isPublic() { return isPublic; }
+    public void setPublic(boolean isPublic) { this.isPublic = isPublic; }
 
     /**
      * Verify password against stored hash
