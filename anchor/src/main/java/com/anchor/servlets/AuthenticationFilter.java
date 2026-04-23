@@ -58,7 +58,14 @@ public class AuthenticationFilter implements Filter {
         HttpSession session = httpRequest.getSession(false);
 
         if (session != null && session.getAttribute("user") != null) {
-            // user is logged in, let them through
+            // user is logged in - now check admin-only paths
+            boolean isAdminPath = uri.contains("/admin");
+            if (isAdminPath && !"ADMIN".equals(session.getAttribute("role"))) {
+                // logged in but not admin - block admin pages
+                System.out.println("[Anchor] Non-admin blocked from: " + uri);
+                httpResponse.sendRedirect(httpRequest.getContextPath() + "/dashboard.jsp?error=admin_only");
+                return;
+            }
             chain.doFilter(request, response);
         } else {
             // not logged in, send to login page

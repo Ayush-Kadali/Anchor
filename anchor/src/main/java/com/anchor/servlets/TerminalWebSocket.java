@@ -192,6 +192,9 @@ public class TerminalWebSocket {
             String ownerName = r.length > 2 ? r[2] : "unknown";
             sendText(session, "Device in use by " + ownerName + ".\r\n");
             sendText(session, "Joined as VIEWER (read-only). You can see all output.\r\n\r\n");
+        } else if (result.startsWith("BLOCKED:")) {
+            sendText(session, "You have been blocked from this device by an administrator.\r\n");
+            sendText(session, "Contact an admin to regain access.\r\n\r\n");
         }
     }
 
@@ -291,11 +294,16 @@ public class TerminalWebSocket {
             return;
         }
 
+        // log input for audit trail and PDF download
+        mgr.logInput(connId, username, msg);
+
         // send command to device
         mgr.send(session.getId(), (msg + "\r\n").getBytes());
 
-        // broadcast what was typed to all viewers so they can see commands too
-        mgr.broadcastToViewers(connId, "> " + msg + "\r\n");
+        // broadcast with timestamp + username so viewers see command audit live
+        String timestamp = new java.text.SimpleDateFormat("HH:mm:ss")
+                               .format(new java.util.Date());
+        mgr.broadcastToViewers(connId, "[" + timestamp + "] " + username + "> " + msg + "\r\n");
     }
 
     @OnClose
